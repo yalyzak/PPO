@@ -9,9 +9,11 @@ class MoveToGoal:
         self.Agent = None
         self.goal = goal
         self.speed = 500
+        self.dt = 0
 
     def attach(self, parent):
         self.Agent = parent.get_component("Agent")
+        self.trainer = self.Agent.trainer
 
     def OnEpisodeBegin(self):
         self.parent.reset_to_default()
@@ -20,12 +22,20 @@ class MoveToGoal:
         self.goal.local_position += Vector3(random.uniform(-4, 4), 0, random.uniform(-4, 4))
 
     def Update(self, dt):
+        self.dt += dt
         pos = self.parent.local_position
         pos2 = self.goal.local_position
         obs = [pos.x, pos.y, pos.z, pos2.x, pos2.y, pos2.z]
-        action, _, _ = self.Agent.get_continuous_action(obs)
+        action = self.Agent.get_continuous_actions(obs)
         self.Move(action[0], action[1], dt)
         self.addRewardByDistance(pos, pos2)
+        if self.dt > 20:
+            stats = self.trainer.learn_if_ready()
+            if stats is not None:
+                print("PPO update:", stats)
+                self.trainer.print_performance()
+                self.dt = 0
+
     def Move(self, x, z, dt):
         self.parent.Rigidbody.velocity += Vector3(x, 0, z) * dt * self.speed
 

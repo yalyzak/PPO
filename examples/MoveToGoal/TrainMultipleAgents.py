@@ -1,6 +1,6 @@
 import copy
 
-from bereshit.addons.PPO import Agent, ActorCritic
+from bereshit.addons.PPO import Config, Trainer, Agent
 from bereshit import Object, Vector3, Core, Camera, BoxCollider, Rigidbody
 from bereshit.addons.essentials import FPS_cam, CamController
 from Names_types import Wall, Goal
@@ -34,14 +34,23 @@ def create_scene(y, shared_agent):
     main = Object(position=Vector3(0,y,0), size=Vector3(0,0,0), children=[floor, wall1, wall2, wall3, wall4, agent, goal])
 
     return main
+
 scene = []
-for i in range(2):
-    shared_agent = Agent(
+
+for i in range(5):
+    config = Config(
         obs_dim=6,
         action_dim_continuous=2,
-        save_dir="data2",
-        max_steps=10
-    )
-    scene += [create_scene(i * 4, copy.deepcopy(shared_agent))]
+        rollout_steps=1024,
+        device="cpu",
+        best_model_path="data/model.pt",
 
-Core.run(scene + [cam], speed=1, Render=True)
+
+    )
+    trainer = Trainer(config)
+
+    agent_component = Agent(trainer, agent_id=0)
+
+    scene += [create_scene(i * 4, copy.deepcopy(agent_component))]
+
+Core.run(scene + [cam], speed=10, Render=True)

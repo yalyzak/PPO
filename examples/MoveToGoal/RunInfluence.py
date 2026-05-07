@@ -1,4 +1,4 @@
-from bereshit.addons.PPO import Agent, ActorCritic
+from bereshit.addons.PPO import Config, Trainer, Agent
 from bereshit import Object, Vector3, Core, Camera, BoxCollider, Rigidbody
 from bereshit.addons.essentials import FPS_cam, CamController
 from Names_types import Wall, Goal
@@ -16,7 +16,17 @@ wall4 = Object(position=Vector3(0,0,10), size=Vector3(20,1,1)).add_component(Box
 
 goal = Object(position=Vector3(2,0,0)).add_component(BoxCollider(), Rigidbody(isKinematic=True), Goal())
 
-agent_component = Agent(obs_dim=6, action_dim_continuous=2, model="data2/model.pth")
+config = Config(
+    obs_dim=6,
+    action_dim_continuous=2,
+    rollout_steps=1024,
+    device="cpu",
+)
+
+trainer = Trainer(config)
+trainer.load("data/model.pt")
+
+agent_component = Agent(trainer, agent_id=0)
 agent = Object().add_component(BoxCollider(), Rigidbody(Freeze_Rotation=Vector3(1,1,1)), agent_component, MoveToGoal(goal))
 
 scene = [floor, wall1, wall2, wall3, wall4, agent, goal]
