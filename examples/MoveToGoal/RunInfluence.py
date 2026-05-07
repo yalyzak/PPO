@@ -21,6 +21,7 @@ config = Config(
     action_dim_continuous=2,
     rollout_steps=1024,
     device="cpu",
+    # max_steps=30
 )
 
 trainer = Trainer(config)

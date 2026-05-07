@@ -62,7 +62,7 @@ class Config:
     device: str = "cpu"
     performance_window: int = 100
     best_model_path: Optional[str] = None
-
+    max_steps: Optional[int] = None
 
     def __post_init__(self) -> None:
         if self.action_dim_continuous < 0:
@@ -177,6 +177,10 @@ class Trainer:
         self.episode_lengths: Deque[int] = deque(maxlen=config.performance_window)
         self.best_average_reward: float = float("-inf")
         self.last_stats: Dict[str, float] = {}
+
+        # When True, the model is only used for actions.
+        # No transitions are stored and learn_if_ready() will not train.
+        self.inference_only: bool = False
 
     def _to_obs_tensor(self, observation: np.ndarray) -> torch.Tensor:
         if not isinstance(observation, np.ndarray):
@@ -359,6 +363,8 @@ class Trainer:
 
     def learn_if_ready(self, force: bool = False) -> Optional[Dict[str, float]]:
         """Train once when enough shared rollout data exists."""
+        if self.inference_only:
+            return None
         if len(self.buffer) < self.config.rollout_steps and not force:
             return None
         if len(self.buffer) == 0:
@@ -381,7 +387,6 @@ class Trainer:
         average_reward = self.get_average_reward()
         if average_reward is not None and average_reward > self.best_average_reward:
             self.best_average_reward = average_reward
-
             if self.config.best_model_path is not None:
                 self.save(self.config.best_model_path)
 
@@ -417,6 +422,7 @@ class Trainer:
         print(f"Best avg reward:      {best_reward_text}")
         print(f"Avg episode length:   {avg_length_text}")
         print(f"Best model path:      {self.config.best_model_path}")
+        print(f"Max steps/episode:    {self.config.max_steps if self.config.max_steps is not None else 'None'}")
 
         if self.last_stats:
             print(f"Policy loss:          {self.last_stats.get('policy_loss', 0.0):.5f}")
@@ -513,14 +519,70 @@ class Trainer:
                 "model": self.model.state_dict(),
                 "optimizer": self.optimizer.state_dict(),
                 "config": self.config.__dict__,
+                "training_updates": self.training_updates,
+                "total_environment_steps": self.total_environment_steps,
+                "completed_episodes": self.completed_episodes,
+                "best_average_reward": self.best_average_reward,
             },
             path,
         )
 
-    def load(self, path: str) -> None:
+    def load(self, path: str, load_optimizer: bool = True) -> None:
+        """
+        Load a saved model checkpoint.
+
+        Use load_optimizer=True when continuing training.
+        Use load_optimizer=False when only using the trained model for gameplay/inference.
+        """
         checkpoint = torch.load(path, map_location=self.device)
         self.model.load_state_dict(checkpoint["model"])
-        self.optimizer.load_state_dict(checkpoint["optimizer"])
+
+        if load_optimizer and "optimizer" in checkpoint:
+            self.optimizer.load_state_dict(checkpoint["optimizer"])
+
+        self.training_updates = int(checkpoint.get("training_updates", self.training_updates))
+        self.total_environment_steps = int(checkpoint.get("total_environment_steps", self.total_environment_steps))
+        self.completed_episodes = int(checkpoint.get("completed_episodes", self.completed_episodes))
+        self.best_average_reward = float(checkpoint.get("best_average_reward", self.best_average_reward))
+
+    def load_trained_model(self, path: Optional[str] = None, inference_only: bool = True) -> None:
+        """
+        Load a trained model and prepare it for use.
+
+        By default this uses config.best_model_path and switches to inference-only mode.
+        In inference-only mode:
+        - actions still work
+        - rewards are ignored for training
+        - transitions are not stored
+        - learn_if_ready() does nothing
+        """
+        model_path = path if path is not None else self.config.best_model_path
+        self.load(model_path, load_optimizer=False)
+        self.set_inference_mode(inference_only)
+
+    def set_inference_mode(self, enabled: bool = True) -> None:
+        """
+        Turn inference-only mode on/off.
+
+        enabled=True:
+            Use the trained model without learning.
+        enabled=False:
+            Resume normal PPO training behavior.
+        """
+        self.inference_only = bool(enabled)
+        self.model.eval() if self.inference_only else self.model.train()
+        if self.inference_only:
+            self.buffer.clear()
+
+    @torch.no_grad()
+    def predict_actions(self, observation: np.ndarray, deterministic: bool = True) -> Dict[str, object]:
+        """
+        Use the current model directly without storing PPO data.
+
+        This is the simplest function for gameplay after training.
+        """
+        continuous_action, discrete_action, _ = self.act(observation, deterministic=deterministic)
+        return {"continuous": continuous_action, "discrete": discrete_action}
 
 
 class Agent:
@@ -612,10 +674,20 @@ class Agent:
         - If this agent already had a previous action, this call stores that previous
           transition using the current observation as next_observation.
         - Because this is per-agent state, agents can request actions independently.
+        - If config.max_steps is set, the agent automatically ends the episode when
+          episode_step reaches max_steps.
         """
+        if self.should_end_by_max_steps():
+            self.end_episode()
+
         observations = np.asarray(observations, dtype=np.float32)
 
-        if self.has_active_action and self.last_observation is not None and self.last_ppo_data is not None:
+        if (
+            not self.trainer.inference_only
+            and self.has_active_action
+            and self.last_observation is not None
+            and self.last_ppo_data is not None
+        ):
             self.trainer.store_transition(
                 agent_id=self.agent_id,
                 observation=self.last_observation,
@@ -633,7 +705,15 @@ class Agent:
         self.has_active_action = True
         self.episode_step += 1
 
+        if self.should_end_by_max_steps():
+            self.end_episode()
+
         return continuous_action, discrete_action
+
+    def should_end_by_max_steps(self) -> bool:
+        """Return True when this episode reached config.max_steps."""
+        max_steps = self.trainer.config.max_steps
+        return max_steps is not None and self.episode_step >= max_steps
 
     def add_reward(self, reward: float) -> None:
         """Add reward to this agent's current step and episode total."""
@@ -658,7 +738,12 @@ class Agent:
         final_episode_reward = self.episode_reward
         final_episode_length = self.episode_step
 
-        if self.has_active_action and self.last_observation is not None and self.last_ppo_data is not None:
+        if (
+            not self.trainer.inference_only
+            and self.has_active_action
+            and self.last_observation is not None
+            and self.last_ppo_data is not None
+        ):
             self.trainer.store_transition(
                 agent_id=self.agent_id,
                 observation=self.last_observation,
@@ -668,7 +753,8 @@ class Agent:
                 next_observation=None,
             )
 
-        self.trainer.record_episode_result(final_episode_reward, final_episode_length)
+        if not self.trainer.inference_only:
+            self.trainer.record_episode_result(final_episode_reward, final_episode_length)
         self.OnEpisodeBegin()
 
 
@@ -679,6 +765,7 @@ if __name__ == "__main__":
         action_dim_continuous=3,
         action_dim_discrete=5,
         rollout_steps=1024,
+        max_steps=250,
         device="cpu",
     )
     trainer = Trainer(config)
