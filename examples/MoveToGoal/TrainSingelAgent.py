@@ -20,8 +20,8 @@ config = Config(
     action_dim_continuous=2,
     rollout_steps=1024,
     device="cpu",
-    best_model_path="data/model.pt",
-    # max_steps=50
+    best_model_path="model.pt",
+    max_steps=200
 
 )
 

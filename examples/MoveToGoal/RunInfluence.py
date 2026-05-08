@@ -25,11 +25,11 @@ config = Config(
 )
 
 trainer = Trainer(config)
-trainer.load("data/model.pt")
+trainer.load("model.pt")
 
 agent_component = Agent(trainer, agent_id=0)
 agent = Object().add_component(BoxCollider(), Rigidbody(Freeze_Rotation=Vector3(1,1,1)), agent_component, MoveToGoal(goal))
 
 scene = [floor, wall1, wall2, wall3, wall4, agent, goal]
 
-Core.run([cam] + scene, speed=1, Render=True)
+Core.run([cam] + scene, speed=10, Render=True)
