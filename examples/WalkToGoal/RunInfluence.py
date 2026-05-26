@@ -64,6 +64,8 @@ def creat_robot(pos=Vector3()):
         action_dim_continuous=10,
         rollout_steps=1024,
         device="cpu",
+        hidden_size=256,
+        max_steps = 1000,
 
     )
 

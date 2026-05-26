@@ -2,11 +2,11 @@ import copy
 
 from bereshit import Object, Vector3, Core, Camera, BoxCollider, Rigidbody, FixedJoint, Joint
 from bereshit.addons.essentials import FPS_cam, CamController
-from Yetzer.walkToGoal.Servo import Servo
-from Yetzer.walkToGoal.Walk import Walk
+from Servo import Servo
+from WalkToGoal import Walk
 from bereshit.addons.PPO.examples.MoveToGoal.Names_types import Goal, Wall
 from bereshit.addons.PPO import Trainer, Agent, Config
-from ServoMovement import ServoMovment
+
 cam = Object(position=Vector3(8, 0, 0), rotation=Vector3(0,-90,0)).add_component(Camera(shading="material preview"), CamController(), FPS_cam())
 
 
@@ -61,10 +61,11 @@ def creat_robot(pos):
     config = Config(
         obs_dim=302,
         action_dim_continuous=10,
-        rollout_steps=1024,
-        device="cpu",
+        rollout_steps=4096,
+        device="cuda",
         best_model_path="walk.pt",
-        max_steps=1000
+        max_steps=1000,
+        hidden_size=256
 
     )
 
@@ -80,7 +81,7 @@ def creat_robot(pos):
 
     return legs
 
-legs = [creat_robot(Vector3(0,0,i * 200)) for i in range(5)]
+legs = [creat_robot(Vector3(0,0,i * 200)) for i in range(10)]
 
 
 Core.run(legs, Render=False, tick=1/240, speed=1)

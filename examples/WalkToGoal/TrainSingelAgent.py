@@ -64,7 +64,8 @@ def creat_robot(pos):
         rollout_steps=1024,
         device="cpu",
         best_model_path="walk.pt",
-        max_steps=1000
+        max_steps=1000,
+        hidden_size=256
 
     )
 

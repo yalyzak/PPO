@@ -15,8 +15,10 @@ class ServoController:
         self._axis = Vector3()
         self.max_rotation = 90
         self.min_rotation = -90
-        self.target_angle = 0.0
         self.other = other
+
+    def Reset(self):
+        self.target_angle = 0.0
 
     def move(self, input_value, dt):
         """
