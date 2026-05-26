@@ -62,6 +62,7 @@ class Walk:
         reward = self.lastDistance - dis
         self.lastDistance = dis
         if reward > 0:
+            reward = np.clip(reward * 10, -1, 1)
             self.Agent.add_reward(reward * 10)
 
     def addRewardByTime(self, dt):
@@ -102,9 +103,9 @@ class Walk:
 
             observations[i:i + 3] = ang_val
             i += 3
-        observations[len(observations)-1] = self.goal.position.z
-        observations[len(observations)-2] = self.goal.position.y
-        observations[len(observations)-3] = self.goal.position.z
+        observations[-3] = self.goal.position.x
+        observations[-2] = self.goal.position.y
+        observations[-1] = self.goal.position.z
 
         return observations
 
