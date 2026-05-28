@@ -31,7 +31,7 @@ def creat_robot(pos=Vector3()):
 
     mount2 = Object(position=Vector3(0,7,0), size=Vector3(.5, .5, .5)).add_component(BoxCollider(), Rigidbody(mass=0.01), FixedJoint(calf))
 
-    knee = Object(position=Vector3(0,8,0), size=Vector3(.5, .5, .5), name="knee").add_component(BoxCollider(), Rigidbody(mass=0.01), Servo(mount2, axis=Vector3(0,0,1)))
+    knee = Object(position=Vector3(0,8,0), size=Vector3(.5, .5, .5), name="knee").add_component(BoxCollider(), Rigidbody(mass=0.01), Servo(mount2, axis=Vector3(0,0,1), max=0))
 
     thigh = Object(position=Vector3(0,10,0), size=Vector3(.5,3,.5)).add_component(BoxCollider(), Rigidbody(mass=0.01), FixedJoint(knee))
 
@@ -60,12 +60,12 @@ def creat_robot(pos=Vector3()):
     hip_bone = Object(position=Vector3(0,14,1), size=Vector3(.5, .5, 2), name="hip_bone").add_component(BoxCollider(), Rigidbody(mass=0.02), FixedJoint(hip_l), FixedJoint(hip2))
 
     config = Config(
-        obs_dim=302,
+        obs_dim=310,
         action_dim_continuous=10,
         rollout_steps=1024,
-        device="cpu",
+        device="cuda",
         hidden_size=256,
-        max_steps = 1000,
+        max_steps=1000,
 
     )
 

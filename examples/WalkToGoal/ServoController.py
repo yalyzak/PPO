@@ -5,16 +5,16 @@ from bereshit import Vector3, Quaternion, HingeJoint
 
 
 class ServoController:
-    def __init__(self, other):
+    def __init__(self, other, max=90, min=-90):
         self.target_angle = 0.0
         self.kP = 0.2  # converts angle error → desired speed
         self.kD = 0.1  # constant speed
-        self.max_speed = 6.54  # rad/s
+        self.max_speed = 60.54  # rad/s
         self._speed = 120
-        self.max_torque = 10.32  # strength of motor
+        self.max_torque = 100.32  # strength of motor
         self._axis = Vector3()
-        self.max_rotation = 90
-        self.min_rotation = -90
+        self.max_rotation = max
+        self.min_rotation = min
         self.other = other
 
     def Reset(self):

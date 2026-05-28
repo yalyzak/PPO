@@ -59,10 +59,10 @@ def creat_robot(pos):
     hip_bone = Object(position=Vector3(0,14,1), size=Vector3(.5, .5, 2), name="hip_bone").add_component(BoxCollider(), Rigidbody(mass=0.02), FixedJoint(hip_l), FixedJoint(hip2))
 
     config = Config(
-        obs_dim=302,
+        obs_dim=310,
         action_dim_continuous=10,
-        rollout_steps=1024,
-        device="cpu",
+        rollout_steps=16384,
+        device="cuda",
         best_model_path="walk.pt",
         max_steps=1000,
         hidden_size=256
@@ -84,4 +84,4 @@ def creat_robot(pos):
 legs = [creat_robot(Vector3(0,0,i * 200)) for i in range(1)]
 
 
-Core.run(legs + [cam], Render=True, tick=1/240, speed=1)
+Core.run(legs, Render=False, tick=1/240, speed=1)

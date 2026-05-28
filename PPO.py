@@ -41,6 +41,9 @@ import torch.optim as optim
 from torch.distributions import Categorical, Normal
 
 
+from bereshit.Vector3 import Vector3
+from bereshit.Quaternion import Quaternion
+
 @dataclass
 class Config:
     obs_dim: int
@@ -606,8 +609,28 @@ class Agent:
         self.last_ppo_data: Optional[Dict[str, torch.Tensor]] = None
         self.has_active_action: bool = False
 
+        self.observations = np.empty(self.trainer.config.obs_dim)
+        self.collected_observations = 0
+
     def Start(self):
         self.OnEpisodeBegin()
+
+    def add_observation(self, observation):
+        if type(observation) == Vector3:
+            self.observations[self.collected_observations] = observation.x
+            self.observations[self.collected_observations+1] = observation.y
+            self.observations[self.collected_observations+2] = observation.z
+            self.collected_observations += 3
+        elif type(observation) == Quaternion:
+            self.observations[self.collected_observations] = observation.x
+            self.observations[self.collected_observations + 1] = observation.y
+            self.observations[self.collected_observations + 2] = observation.z
+            self.observations[self.collected_observations + 3] = observation.w
+            self.collected_observations += 4
+        else:
+            self.observations[self.collected_observations] = observation
+            self.collected_observations += 1
+
 
     def OnEpisodeBegin(self) -> None:
         """
@@ -617,6 +640,7 @@ class Agent:
         self.episode_reward = 0.0
         self.pending_reward = 0.0
         self.episode_step = 0
+        self.collected_observations = 0
         self.last_observation = None
         self.last_ppo_data = None
         self.has_active_action = False
@@ -625,14 +649,17 @@ class Agent:
                 if hasattr(component, 'OnEpisodeBegin') and component != self:
                     component.OnEpisodeBegin()
 
-    def get_continuous_actions(self, observations: np.ndarray, deterministic: bool = False) -> np.ndarray:
+    def get_continuous_actions(self, deterministic: bool = False) -> np.ndarray:
+        if self.collected_observations != self.trainer.config.obs_dim:
+            raise ValueError(f"Expected observation size {self.trainer.config.obs_dim}, got shape {self.collected_observations}")
+        self.collected_observations = 0
         """
         Required function: returns only the continuous action branch.
 
         Use this if your agent has continuous actions only, or if the engine separately asks
         for continuous actions. If action_dim_continuous is 0, this raises an error.
         """
-        continuous_action, _ = self.get_mixed_actions(observations, deterministic=deterministic)
+        continuous_action, _ = self.get_mixed_actions(self.observations, deterministic=deterministic)
         if continuous_action is None:
             raise RuntimeError("This Agent has no continuous action branch. Set action_dim_continuous > 0.")
         return continuous_action
