@@ -651,7 +651,9 @@ class Agent:
 
     def get_continuous_actions(self, deterministic: bool = False) -> np.ndarray:
         if self.collected_observations != self.trainer.config.obs_dim:
-            raise ValueError(f"Expected observation size {self.trainer.config.obs_dim}, got shape {self.collected_observations}")
+            collected_observations = self.collected_observations
+            self.collected_observations = 0
+            raise ValueError(f"Expected observation size {self.trainer.config.obs_dim}, got shape {collected_observations}")
         self.collected_observations = 0
         """
         Required function: returns only the continuous action branch.
