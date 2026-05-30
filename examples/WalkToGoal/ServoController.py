@@ -1,66 +1,69 @@
 import math
-
 import keyboard
 from bereshit import Vector3, Quaternion, HingeJoint
 
 
 class ServoController:
-    def __init__(self, other, max=90, min=-90):
+    def __init__(self, other, max_rotation=90, min_rotation=-90):
         self.target_angle = 0.0
-        self.kP = 0.2  # converts angle error → desired speed
-        self.kD = 0.1  # constant speed
-        self.max_speed = 60.54  # rad/s
-        self._speed = 120
-        self.max_torque = 100.32  # strength of motor
+
+        self.max_speed = 6.54
+        self.input_speed = 120.0
+        self.max_torque = 1.32
+
         self._axis = Vector3()
-        self.max_rotation = max
-        self.min_rotation = min
+        self.max_rotation = max_rotation
+        self.min_rotation = min_rotation
         self.other = other
 
     def Reset(self):
         self.target_angle = 0.0
 
     def move(self, input_value, dt):
-        """
-        input_value: float in range [-1, 1]
-            -1 → full negative (e.g. "w")
-             0 → no input
-             1 → full positive (e.g. "s")
-        """
+        joint = self.parent.get_component(HingeJoint)
+        self._axis = joint.axis_world.normalized()
 
-        self._axis = self.parent.get_component(HingeJoint).axis_world.normalized()
-
-        # smooth continuous control
-        self.target_angle += input_value * self._speed * dt
-
-        # clamp rotation
-        self.target_angle = max(min(self.target_angle, self.max_rotation), self.min_rotation)
+        self.target_angle += input_value * self.input_speed * dt
+        self.target_angle = max(
+            min(self.target_angle, self.max_rotation),
+            self.min_rotation
+        )
 
         self.fix(dt)
 
     def fix(self, dt):
-        self._axis = self.parent.get_component(HingeJoint).axis_world.normalized()
-
+        axis = self.parent.get_component(HingeJoint).axis_world.normalized()
         rb = self.parent.Rigidbody
 
         relative_q = self.other.quaternion.conjugate() * self.parent.quaternion
-        current_angle = relative_q.to_euler().dot(self._axis)
-        error = self.target_angle - current_angle
+        current_angle = relative_q.to_euler().dot(axis)
 
-        # normalize angle to [-180, 180] (VERY IMPORTANT)
+        error = self.target_angle - current_angle
         error = (error + 180) % 360 - 180
 
-        angular_velocity = rb.angular_velocity.dot(self._axis)
+        angular_velocity = rb.angular_velocity.dot(axis)
 
-        # torque (this creates acceleration naturally)
-        torque = self.kP * error - self.kD * angular_velocity
+        # degrees/sec
+        max_speed = self.max_speed
+
+        # slow down near target
+        slow_distance = 20.0  # degrees
+        desired_velocity = max_speed * max(min(error / slow_distance, 1.0), -1.0)
+
+        # velocity controller
+        velocity_error = desired_velocity - angular_velocity
+
+        # convert velocity error into torque
+        torque = velocity_error * self.max_torque
 
         # clamp torque
         torque = max(min(torque, self.max_torque), -self.max_torque)
 
-        impulse = torque * dt * self._axis
-        self.apply_angular_impulse(impulse)
-        # self.clamp_speed()
+        # stop jitter near target
+        if abs(error) < 0.3 and abs(angular_velocity) < 0.2:
+            torque = 0
+
+        self.apply_angular_impulse(torque * dt * axis)
 
     def clamp_rotation(self):
         self.parent.quaternion = max(min(self.parent.quaternion.to_euler(), self.max_rotation), -self.max_rotation)
@@ -77,9 +80,10 @@ class ServoController:
     def PhysicsUpdate(self, dt):
         self.fix(dt)
 
+
 class ServoControllerKeyboard(ServoController):
-    def __init__(self, other, keys=["e", "q"]):
-        super().__init__()
+    def __init__(self, other, max=90, min=-90, keys=["e", "q"]):
+        super().__init__(other, max, min)
         self.key0 = keys[0]
         self.key1 = keys[1]
 
@@ -93,8 +97,7 @@ class ServoControllerKeyboard(ServoController):
         return value
 
     def PhysicsUpdate(self, dt):
-        super().Update(dt)
+        super().PhysicsUpdate(dt)
         input_value = ServoControllerKeyboard.get_keyboard_input(self.key0, self.key1)
         if input_value != 0:
             self.move(input_value, dt)
-

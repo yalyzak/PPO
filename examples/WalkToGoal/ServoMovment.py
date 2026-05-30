@@ -31,6 +31,11 @@ class ServoMovment:
         self.ankle1s[0].ServoController.move(self.degres, dt)
         # self.hip2s[0].ServoController.move(self.degres * 0.1, dt)
 
+    def walkRight2(self, dt):
+        self.degres += 1 * dt
+        self.knees[0].ServoController.move(-2 * self.degres, dt)
+        self.ankle1s[0].ServoController.move(self.degres, dt)
+
     def stepRight(self, dt):
         self.degres -= 1 * dt
         self.hip1s[0].ServoController.move(2 * self.degres, dt)
@@ -48,4 +53,4 @@ class ServoMovment:
             self.walkRight(dt)
 
         if keyboard.is_pressed("t"):
-            self.stepRight(dt)
+            self.walkRight2(dt)
