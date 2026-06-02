@@ -13,11 +13,13 @@ class Walk:
         self.dt = 0
         self.size = size
         self.beta = Vector3(-1, 0, 1)
-        self.expected_vel = 2
+        self.target_speed = 2
         self.expected_vel_vector_cache = Vector3()
         self.body_vel = Vector3()
         self.last_position = Vector3()
         self.lastDistance = 0
+        self.speed = 0.1
+        self.last_val = Vector3()
 
     def attach(self, parent):
         self.Agent = parent.get_component("Agent")
@@ -39,8 +41,11 @@ class Walk:
         self.goal.local_position = self.spawn_Goal(self.beta, self.size)
         self.expected_vel = random.uniform(2, 5)
         self.last_position = self.get_average_position()
-        self.lastDistance = self.getAverageDistance()
+        self.lastDistance = self.getDistance()
 
+        self.set_body_val()
+        direction = (self.goal.position - self.last_position).normalized()
+        self.last_val = self.body_vel.dot(direction)
 
     def Update(self, dt):
         self.dt += dt
@@ -51,38 +56,60 @@ class Walk:
         self.move(action, dt)
         self.addRewardByVelocity()
         self.addRewardByDistance()
+        self.Agent.add_reward(0.0005)
         self.printData()
 
     def addRewardByVelocity(self):
         current = self.get_average_position()
-        direction = (self.goal.position - current).normalized()
-        progress = (current - self.last_position).dot(direction)
-        self.Agent.add_reward(progress * 0.01)
-        self.last_position = current
+        to_goal = self.goal.position - current
+
+        if to_goal.magnitude() < 1e-6:
+            return
+
+        direction = to_goal.normalized()
+        forward_speed = self.body_vel.dot(direction)
+
+        # best reward when forward_speed == target_speed
+        speed_error = abs(forward_speed - self.target_speed)
+
+        reward = 1.0 - min(speed_error / self.target_speed, 1.0)
+
+        self.Agent.add_reward(reward * 0.01)
+        reward = max(-0.0001, -self.hip_bone.Rigidbody.angular_velocity.magnitude() * 0.0001)
+        self.Agent.add_reward(reward)
+
 
     def addRewardByDistance(self):
-        dis = self.getAverageDistance()
+        dis = self.getDistance()
+        if dis > 35:
+            self.Agent.add_reward(-1)
+            self.Agent.end_episode()
         reward = self.lastDistance - dis
         self.lastDistance = dis
         self.Agent.add_reward(reward * 0.2)
+        if self.hip_bone.position.y < 12:
+            self.Agent.add_reward(-0.0001)
+        if self.hip_bone.position.y < 10:
+            self.Agent.add_reward(-1)
+            self.Agent.end_episode()
+
+        reward = self.hip_bone.up.dot(Vector3(0,1,0)) - 1
+        self.Agent.add_reward(reward * 0.0001)
 
     def set_body_val(self):
         val = Vector3()
         length = len(self.body_parts)
         for part in self.body_parts:
             val += part.Rigidbody.velocity
-
         self.body_vel = val / length
 
 
     def move(self, action, dt):
         for i, servo in enumerate(self.servos):
-            servo.ServoController.move(action[i], dt)
+            servo.ServoController.move(action[i] * self.speed, dt)
 
-    def getAverageDistance(self):
-        distance1 = (self.feets[0].position - self.goal.position).magnitude()
-        distance2 = (self.feets[1].position - self.goal.position).magnitude()
-        distance = (distance1 + distance2) / 2
+    def getDistance(self):
+        distance = (self.hip_bone.position - self.goal.position).magnitude()
         return distance
 
     def add_observations(self):
@@ -93,7 +120,6 @@ class Walk:
             self.Agent.add_observation(body_part.Rigidbody.angular_velocity)
 
         self.Agent.add_observation(self.goal.local_position)
-        self.Agent.add_observation(self.expected_vel_vector_cache * self.expected_vel)
         self.Agent.add_observation(self.body_vel)
         self.Agent.add_observation(self.feets[0].Collider.stay)
         self.Agent.add_observation(self.feets[1].Collider.stay)

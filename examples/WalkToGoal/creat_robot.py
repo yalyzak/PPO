@@ -10,7 +10,7 @@ def creat_robot(pos=Vector3(), use_keyboard=False, model=None):
     floor = Object(size=Vector3(100, 1, 100), position=Vector3(0, -1, 0)).add_component(BoxCollider(),
                                                                                         Rigidbody(isKinematic=True), Wall())
 
-    goal = Object(position=Vector3(-1, 0, 4)).add_component(BoxCollider(is_trigger=True), Rigidbody(isKinematic=True),
+    goal = Object(position=Vector3(-1, 14, 4)).add_component(BoxCollider(is_trigger=True), Rigidbody(isKinematic=True),
                                                            Goal())
     scene = [floor, goal]
 
@@ -55,13 +55,14 @@ def creat_robot(pos=Vector3(), use_keyboard=False, model=None):
     hip_bone = Object(position=Vector3(0,14,1), size=Vector3(.5, .5, 2), name="hip_bone").add_component(BoxCollider(), Rigidbody(mass=0.02), FixedJoint(hip_l), FixedJoint(hip2))
 
     config = Config(
-        obs_dim=306,
+        obs_dim=307,
         action_dim_continuous=10,
-        rollout_steps=1024,
+        rollout_steps=16384,
         device="cuda",
         hidden_size=256,
         max_steps=1000,
-
+        best_model_path="walk.pt",
+        entropy_coef = 0.001
     )
 
     trainer = Trainer(config)

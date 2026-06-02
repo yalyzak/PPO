@@ -1,6 +1,7 @@
 from bereshit import BoxCollider, HingeJoint, FixedJoint, MeshRander
 from bereshit.addons.PPO.examples.WalkToGoal.ServoController import ServoController, ServoControllerKeyboard
 
+
 class Servo:
     def __init__(self, mount, axis, use_model=False, useKeyboard=False, max_rotation=90, min_rotation=-90):
         self._servo = None
