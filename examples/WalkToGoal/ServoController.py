@@ -9,7 +9,7 @@ class ServoController:
 
         self.max_speed = 6.54
         self.input_speed = 120.0
-        self.max_torque = 1.32
+        self.max_torque = 10.32
 
         self._axis = Vector3()
         self.max_rotation = max_rotation
@@ -28,8 +28,6 @@ class ServoController:
             min(self.target_angle, self.max_rotation),
             self.min_rotation
         )
-
-        self.fix(dt)
 
     def fix(self, dt):
         axis = self.parent.get_component(HingeJoint).axis_world.normalized()

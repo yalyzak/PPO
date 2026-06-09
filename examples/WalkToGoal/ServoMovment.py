@@ -3,6 +3,7 @@ import keyboard
 
 class ServoMovment:
     def attach(self, parent):
+        self.servos = parent.search_by_component("Servo")
         self.feets = parent.search_by_name("feet")
         self.ankle1s = parent.search_by_name("ankle1")
         self.ankle2s = parent.search_by_name("ankle2")
@@ -17,6 +18,11 @@ class ServoMovment:
         self.ankle2s[1].ServoController.move(self.degres, dt)
         self.hip2s[0].ServoController.move(-self.degres, dt)
         self.hip2s[1].ServoController.move(-self.degres, dt)
+
+    def leanfawored(self, dt):
+        self.degres -= 1 * dt
+        self.knees[0].ServoController.move(self.degres, dt)
+        self.knees[1].ServoController.move(self.degres, dt)
 
     def leanLeft(self, dt):
         self.degres += 1 * dt
@@ -54,3 +60,6 @@ class ServoMovment:
 
         if keyboard.is_pressed("t"):
             self.walkRight2(dt)
+
+        if keyboard.is_pressed("k"):
+            self.leanfawored(dt)

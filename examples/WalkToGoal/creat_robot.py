@@ -5,12 +5,13 @@ from Servo import Servo
 from WalkToGoal import Walk
 from Names_types import Goal, Wall
 from bereshit.addons.PPO import Trainer, Agent, Config
+from ServoMovment import ServoMovment
 
-def creat_robot(pos=Vector3(), use_keyboard=False, model=None):
+def creat_robot(pos=Vector3(), use_PPO=True, model=None, save=True):
     floor = Object(size=Vector3(100, 1, 100), position=Vector3(0, -1, 0)).add_component(BoxCollider(),
                                                                                         Rigidbody(isKinematic=True), Wall())
 
-    goal = Object(position=Vector3(-1, 14, 4)).add_component(BoxCollider(is_trigger=True), Rigidbody(isKinematic=True),
+    goal = Object(position=Vector3(-1, 13.8, 0), size=Vector3(0.5, 0.5, 0.5)).add_component(BoxCollider(is_trigger=True), Rigidbody(isKinematic=True),
                                                            Goal())
     scene = [floor, goal]
 
@@ -18,21 +19,21 @@ def creat_robot(pos=Vector3(), use_keyboard=False, model=None):
 
     mount = Object(position=Vector3(0,1,0), size=Vector3(.5, .5, .5), name="mount").add_component(BoxCollider(), Rigidbody(mass=0.01), FixedJoint(feet))
 
-    servo1 = Object(position=Vector3(0,2,0), size=Vector3(.5, .5, .5), name="ankle1").add_component(BoxCollider(), Rigidbody(mass=0.01), Servo(mount, axis=Vector3(0,0,1), useKeyboard=use_keyboard))
+    servo1 = Object(position=Vector3(0,2,0), size=Vector3(.5, .5, .5), name="ankle1").add_component(BoxCollider(), Rigidbody(mass=0.01), Servo(mount, axis=Vector3(0,0,1)))
 
-    servo2 = Object(position=Vector3(0,3,0), size=Vector3(.5, .5, .5), name="ankle2").add_component(BoxCollider(), Rigidbody(mass=0.01), Servo(servo1, axis=Vector3(1,0,0), useKeyboard=use_keyboard))
+    servo2 = Object(position=Vector3(0,3,0), size=Vector3(.5, .5, .5), name="ankle2").add_component(BoxCollider(), Rigidbody(mass=0.01), Servo(servo1, axis=Vector3(1,0,0)))
 
     calf = Object(position=Vector3(0,5,0), size=Vector3(.5,3,.5)).add_component(BoxCollider(), Rigidbody(mass=0.01), FixedJoint(servo2))
 
     mount2 = Object(position=Vector3(0,7,0), size=Vector3(.5, .5, .5)).add_component(BoxCollider(), Rigidbody(mass=0.01), FixedJoint(calf))
 
-    knee = Object(position=Vector3(0,8,0), size=Vector3(.5, .5, .5), name="knee").add_component(BoxCollider(), Rigidbody(mass=0.01), Servo(mount2, axis=Vector3(0,0,1), useKeyboard=use_keyboard))
+    knee = Object(position=Vector3(0,8,0), size=Vector3(.5, .5, .5), name="knee").add_component(BoxCollider(), Rigidbody(mass=0.01), Servo(mount2, axis=Vector3(0,0,1)))
 
     thigh = Object(position=Vector3(0,10,0), size=Vector3(.5,3,.5)).add_component(BoxCollider(), Rigidbody(mass=0.01), FixedJoint(knee))
 
-    hip1 = Object(position=Vector3(0,12,0), size=Vector3(.5, .5, .5), name="hip1").add_component(BoxCollider(), Rigidbody(mass=0.01), Servo(thigh, axis=Vector3(0,0,1), useKeyboard=use_keyboard))
+    hip1 = Object(position=Vector3(0,12,0), size=Vector3(.5, .5, .5), name="hip1").add_component(BoxCollider(), Rigidbody(mass=0.01), Servo(thigh, axis=Vector3(0,0,1)))
 
-    hip2 = Object(position=Vector3(0,13,0), size=Vector3(.5, .5, .5), name="hip2").add_component(BoxCollider(), Rigidbody(mass=0.01), Servo(hip1, axis=Vector3(1,0,0), useKeyboard=use_keyboard))
+    hip2 = Object(position=Vector3(0,13,0), size=Vector3(.5, .5, .5), name="hip2").add_component(BoxCollider(), Rigidbody(mass=0.01), Servo(hip1, axis=Vector3(1,0,0)))
 
 
     leg = Object(size=Vector3(), children=[feet, mount, servo1, servo2, calf, mount2, knee, thigh, hip1, hip2])
@@ -55,23 +56,31 @@ def creat_robot(pos=Vector3(), use_keyboard=False, model=None):
     hip_bone = Object(position=Vector3(0,14,1), size=Vector3(.5, .5, 2), name="hip_bone").add_component(BoxCollider(), Rigidbody(mass=0.02), FixedJoint(hip_l), FixedJoint(hip2))
 
     config = Config(
-        obs_dim=307,
+        obs_dim=320,
         action_dim_continuous=10,
         rollout_steps=16384,
         device="cuda",
         hidden_size=256,
         max_steps=1000,
-        best_model_path="walk.pt",
-        entropy_coef = 0.001
+        best_model_path="walk.pt" if save else None,
+        entropy_coef = 0.001,
+        max_episode_reward = 30
+
     )
 
     trainer = Trainer(config)
     if model:
         trainer.load(model)
 
+
     agent_component = Agent(trainer, agent_id=0)
 
-    legs = Object(size=Vector3(), children=[leg, leg2, hip_bone] + scene).add_component(agent_component, Walk(goal))
+    legs = Object(size=Vector3(), children=[leg, leg2, hip_bone] + scene)
+    if use_PPO:
+        legs.add_component(agent_component, Walk(goal))
+    else:
+        legs.add_component(ServoMovment())
+
 
     legs.local_position += pos
 

@@ -12,13 +12,14 @@ class Walk:
         self.goal = goal
         self.dt = 0
         self.size = size
-        self.beta = Vector3(-1, 0, 1)
+        self.beta = [1]
+        self.passed = [0, 0]
         self.target_speed = 2
         self.expected_vel_vector_cache = Vector3()
         self.body_vel = Vector3()
         self.last_position = Vector3()
         self.lastDistance = 0
-        self.speed = 0.1
+        self.speed = 1
         self.last_val = Vector3()
 
     def attach(self, parent):
@@ -28,17 +29,16 @@ class Walk:
         self.servos = []
         self.feets = parent.search_by_name("feet")
         self.hip_bone = parent.search_by_name("hip_bone")[0]
-        self.hip_bone.add_component(Legs(self.Agent))
+        self.hip_bone.add_component(Legs(self.Agent, self.passed))
         for child in self.body_parts:
             if child.get_component("Servo"):
                 self.servos.append(child)
             if child not in self.feets:
-                child.add_component(BodyPart(self.Agent))
-
+                child.add_component(BodyPart(self.Agent, self.passed))
 
     def OnEpisodeBegin(self):
         self.parent.reset_to_default()
-        self.goal.local_position = self.spawn_Goal(self.beta, self.size)
+        self.goal.local_position = Vector3(-1 - self.beta[0], 13.8, 0)
         self.expected_vel = random.uniform(2, 5)
         self.last_position = self.get_average_position()
         self.lastDistance = self.getDistance()
@@ -48,15 +48,16 @@ class Walk:
         self.last_val = self.body_vel.dot(direction)
 
     def Update(self, dt):
+
+
         self.dt += dt
         self.expected_vel_vector_cache = (self.goal.position - self.get_average_position()).normalized()
         self.set_body_val()
         self.add_observations()
         action = self.Agent.get_continuous_actions()
         self.move(action, dt)
-        self.addRewardByVelocity()
+        # self.addRewardByVelocity()
         self.addRewardByDistance()
-        self.Agent.add_reward(0.0005)
         self.printData()
 
     def addRewardByVelocity(self):
@@ -78,22 +79,25 @@ class Walk:
         reward = max(-0.0001, -self.hip_bone.Rigidbody.angular_velocity.magnitude() * 0.0001)
         self.Agent.add_reward(reward)
 
-
     def addRewardByDistance(self):
         dis = self.getDistance()
-        if dis > 35:
-            self.Agent.add_reward(-1)
-            self.Agent.end_episode()
-        reward = self.lastDistance - dis
-        self.lastDistance = dis
-        self.Agent.add_reward(reward * 0.2)
-        if self.hip_bone.position.y < 12:
-            self.Agent.add_reward(-0.0001)
-        if self.hip_bone.position.y < 10:
-            self.Agent.add_reward(-1)
+        delta = 50 - dis
+        if dis > 50:
+            print("telepored")
+            self.Agent.add_reward(-10)
+            self.passed[1] += 1
             self.Agent.end_episode()
 
-        reward = self.hip_bone.up.dot(Vector3(0,1,0)) - 1
+        self.Agent.add_reward(delta * 0.0008)
+        if self.hip_bone.position.y < 12:
+            self.Agent.add_reward(-0.002)
+        if self.hip_bone.position.y < 10:
+            self.Agent.add_reward(-10)
+            self.passed[1] += 1
+
+            self.Agent.end_episode()
+
+        reward = self.hip_bone.up.dot(Vector3(0, 1, 0)) - 1
         self.Agent.add_reward(reward * 0.0001)
 
     def set_body_val(self):
@@ -103,14 +107,22 @@ class Walk:
             val += part.Rigidbody.velocity
         self.body_vel = val / length
 
-
     def move(self, action, dt):
         for i, servo in enumerate(self.servos):
             servo.ServoController.move(action[i] * self.speed, dt)
 
     def getDistance(self):
-        distance = (self.hip_bone.position - self.goal.position).magnitude()
-        return distance
+        hip_dis = (self.hip_bone.position - self.goal.position).magnitude()
+
+        foot1_vec = self.feets[0].position - self.goal.position
+        foot1_vec.y = 0
+        foot1_dis = foot1_vec.magnitude()
+
+        foot2_vec = self.feets[1].position - self.goal.position
+        foot2_vec.y = 0
+        foot2_dis = foot2_vec.magnitude()
+
+        return hip_dis * 0.5 + foot1_dis * 0.25 + foot2_dis * 0.25
 
     def add_observations(self):
         for body_part in self.body_parts:
@@ -118,9 +130,13 @@ class Walk:
             self.Agent.add_observation(body_part.quaternion.normalized())
             self.Agent.add_observation(body_part.Rigidbody.velocity)
             self.Agent.add_observation(body_part.Rigidbody.angular_velocity)
+        for servo in self.servos:
+            self.Agent.add_observation(servo.ServoController.target_angle)
+
 
         self.Agent.add_observation(self.goal.local_position)
         self.Agent.add_observation(self.body_vel)
+        self.Agent.add_observation(self.parent.findTheCenterOfMass())
         self.Agent.add_observation(self.feets[0].Collider.stay)
         self.Agent.add_observation(self.feets[1].Collider.stay)
 
@@ -137,31 +153,47 @@ class Walk:
             if stats is not None:
                 print("PPO update:", stats)
                 self.trainer.print_performance()
+                if self.passed[0] / self.passed[1] > 0.8:
+                    self.beta[0] += 0.5
                 self.dt = 0
+                print(self.beta[0], self.passed[0] / self.passed[1])
+                self.passed[0] = 0
+                self.passed[1] = 0
 
     def spawn_Goal(self, beta, size):
         vec = beta + Vector3(random.random() * random.choice([-1, 1]), 0,
-                              random.random() * random.choice([-1, 1])).normalized() * size / 2 * 1
+                             random.random() * random.choice([-1, 1])).normalized() * size / 2 * 1
         vec.y = 14
         return vec
 
 
 class BodyPart:
-    def __init__(self, agent):
+    def __init__(self, agent, passed):
         self.Agent = agent
+        self.passed = passed
 
     def OnCollisionEnter(self, Collision):
         if Collision.other.parent.get_component("Wall"):
             self.Agent.add_reward(-1)
+            self.passed[1] += 1
+
             self.Agent.end_episode()
 
 
 class Legs:
 
-    def __init__(self, agent):
+    def __init__(self, agent, passed):
         self.Agent = agent
+        self.passed = passed
+        self.dt = 0
+        self.reward = 0
 
     def OnCollisionEnter(self, Collision):
         if Collision.other.parent.get_component("Goal"):
             self.Agent.add_reward(10)
+            self.passed[0] += 1
+            self.passed[1] += 1
             self.Agent.end_episode()
+
+
+
