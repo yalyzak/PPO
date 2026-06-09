@@ -64,6 +64,7 @@ class Config:
     continuous_action_high: float = 1.0
     device: str = "cpu"
     performance_window: int = 100
+    max_episode_reward:  Optional[int] = None
     best_model_path: Optional[str] = None
     max_steps: Optional[int] = None
 
@@ -392,6 +393,10 @@ class Trainer:
             self.best_average_reward = average_reward
             if self.config.best_model_path is not None:
                 self.save(self.config.best_model_path)
+
+        if self.training_updates % 10 == 0:
+            self.save(self.config.best_model_path[:-3] + "latest" + ".pt")
+
 
     def get_average_reward(self) -> Optional[float]:
         if len(self.episode_rewards) == 0:
@@ -747,8 +752,9 @@ class Agent:
     def add_reward(self, reward: float) -> None:
         """Add reward to this agent's current step and episode total."""
         r = float(reward)
-        self.pending_reward += r
-        self.episode_reward += r
+        if self.trainer.config.max_episode_reward and abs(self.episode_reward) + abs(r) < self.trainer.config.max_episode_reward:
+            self.pending_reward += r
+            self.episode_reward += r
 
     def set_reward(self, reward: float) -> None:
         """Set this step's reward value, replacing any pending reward for the current step."""
