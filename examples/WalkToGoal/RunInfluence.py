@@ -4,4 +4,4 @@ from bereshit.addons.PPO.examples.WalkToGoal.creat_robot import creat_robot
 
 cam = Object(position=Vector3(8, 0, 0), rotation=Vector3(0,-90,0)).add_component(Camera(shading="material preview"), CamController(), FPS_cam())
 
-Core.run([creat_robot(model="walklatest.pt")] + [cam], Render=True, tick=1/240, speed=1)
+Core.run([creat_robot(model="walklatest.pt", save=False)] + [cam], Render=True, tick=1/240, speed=1)

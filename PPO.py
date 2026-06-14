@@ -394,7 +394,7 @@ class Trainer:
             if self.config.best_model_path is not None:
                 self.save(self.config.best_model_path)
 
-        if self.training_updates % 10 == 0:
+        if self.training_updates % 10 == 0 and self.config.best_model_path is not None:
             self.save(self.config.best_model_path[:-3] + "latest" + ".pt")
 
 

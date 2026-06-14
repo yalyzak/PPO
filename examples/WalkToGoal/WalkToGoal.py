@@ -8,19 +8,19 @@ from bereshit import Vector3
 class Walk:
     def __init__(self, goal, size=20):
         self.Agent = None
-        self.speed = 10
         self.goal = goal
         self.dt = 0
         self.size = size
         self.beta = [1]
         self.passed = [0, 0]
-        self.target_speed = 2
+        self.target_speed = 2.0
         self.expected_vel_vector_cache = Vector3()
         self.body_vel = Vector3()
         self.last_position = Vector3()
         self.lastDistance = 0
         self.speed = 1
         self.last_val = Vector3()
+        self.total_dic = 0
 
     def attach(self, parent):
         self.Agent = parent.get_component("Agent")
@@ -42,6 +42,8 @@ class Walk:
         self.expected_vel = random.uniform(2, 5)
         self.last_position = self.get_average_position()
         self.lastDistance = self.getDistance()
+        self.total_dic = self.getDistance()
+
 
         self.set_body_val()
         direction = (self.goal.position - self.last_position).normalized()
@@ -56,49 +58,71 @@ class Walk:
         self.add_observations()
         action = self.Agent.get_continuous_actions()
         self.move(action, dt)
-        # self.addRewardByVelocity()
+        self.addRewardByVelocity()
         self.addRewardByDistance()
+        self.addRewardByPlacement()
         self.printData()
 
-    def addRewardByVelocity(self):
-        current = self.get_average_position()
-        to_goal = self.goal.position - current
+    def addRewardByPlacement(self):
+        foot1_grounded = self.feets[0].Collider.stay or self.feets[0].Collider.enter
+        foot2_grounded = self.feets[1].Collider.stay or self.feets[1].Collider.enter
 
-        if to_goal.magnitude() < 1e-6:
+        # punish jumping too high
+        if self.hip_bone.position.y > 14.2:
+            self.Agent.add_reward(-1.0)
+
+        # reward at least one foot touching ground
+        if foot1_grounded or foot2_grounded:
+            self.Agent.add_reward(0.0005)
+
+        # upright reward
+        upright = self.hip_bone.up.dot(Vector3(0, 1, 0))
+        self.Agent.add_reward((upright) * 0.001)
+
+
+        # punish high vertical velocity
+        self.Agent.add_reward(-abs(self.hip_bone.Rigidbody.velocity.y) * 0.01)
+
+    def addRewardByVelocity(self):
+        # direction to goal on XZ plane
+        direction = self.goal.position - self.hip_bone.position
+        direction.y = 0
+
+        if direction.magnitude() < 0.001:
             return
 
-        direction = to_goal.normalized()
-        forward_speed = self.body_vel.dot(direction)
+        direction = direction.normalized()
 
-        # best reward when forward_speed == target_speed
-        speed_error = abs(forward_speed - self.target_speed)
+        # body velocity on XZ plane only
+        vel = Vector3(self.body_vel.x, 0, self.body_vel.z)
 
-        reward = 1.0 - min(speed_error / self.target_speed, 1.0)
+        speed_toward_goal = vel.dot(direction)
 
-        self.Agent.add_reward(reward * 0.01)
-        reward = max(-0.0001, -self.hip_bone.Rigidbody.angular_velocity.magnitude() * 0.0001)
-        self.Agent.add_reward(reward)
+        # reward only forward movement
+        forward_reward = np.clip(speed_toward_goal / self.target_speed, -1, 1)
+
+        self.Agent.add_reward(forward_reward * 0.005)
+
+        # punish moving too fast / jumping style
+        speed_error = abs(speed_toward_goal - self.target_speed)
+        speed_reward = 1.0 - np.clip(speed_error / self.target_speed, 0, 1)
+
+        self.Agent.add_reward(max(0, speed_reward * 0.003))
+
 
     def addRewardByDistance(self):
         dis = self.getDistance()
-        delta = 50 - dis
-        if dis > 50:
-            print("telepored")
-            self.Agent.add_reward(-10)
-            self.passed[1] += 1
-            self.Agent.end_episode()
+        progress = self.lastDistance - dis
+        self.lastDistance = dis
 
-        self.Agent.add_reward(delta * 0.0008)
-        if self.hip_bone.position.y < 12:
-            self.Agent.add_reward(-0.002)
-        if self.hip_bone.position.y < 10:
-            self.Agent.add_reward(-10)
-            self.passed[1] += 1
+        # only reward real progress
+        self.Agent.add_reward(max(0, progress * 0.1))
 
-            self.Agent.end_episode()
+        stat = (self.total_dic - dis) / self.total_dic
 
-        reward = self.hip_bone.up.dot(Vector3(0, 1, 0)) - 1
-        self.Agent.add_reward(reward * 0.0001)
+        self.Agent.add_reward(stat * 0.001)
+
+
 
     def set_body_val(self):
         val = Vector3()
@@ -174,7 +198,7 @@ class BodyPart:
 
     def OnCollisionEnter(self, Collision):
         if Collision.other.parent.get_component("Wall"):
-            self.Agent.add_reward(-1)
+            self.Agent.add_reward(-2)
             self.passed[1] += 1
 
             self.Agent.end_episode()
@@ -190,10 +214,9 @@ class Legs:
 
     def OnCollisionEnter(self, Collision):
         if Collision.other.parent.get_component("Goal"):
-            self.Agent.add_reward(10)
+            self.Agent.add_reward(2)
             self.passed[0] += 1
             self.passed[1] += 1
             self.Agent.end_episode()
-
 
 

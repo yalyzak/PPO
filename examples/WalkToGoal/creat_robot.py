@@ -8,10 +8,10 @@ from bereshit.addons.PPO import Trainer, Agent, Config
 from ServoMovment import ServoMovment
 
 def creat_robot(pos=Vector3(), use_PPO=True, model=None, save=True):
-    floor = Object(size=Vector3(100, 1, 100), position=Vector3(0, -1, 0)).add_component(BoxCollider(),
+    floor = Object(size=Vector3(100, 1, 100), position=Vector3(0, -0.70, 0)).add_component(BoxCollider(),
                                                                                         Rigidbody(isKinematic=True), Wall())
 
-    goal = Object(position=Vector3(-1, 13.8, 0), size=Vector3(0.5, 0.5, 0.5)).add_component(BoxCollider(is_trigger=True), Rigidbody(isKinematic=True),
+    goal = Object(position=Vector3(0, 13.8, 1), size=Vector3(0.5, 0.5, 0.5)).add_component(BoxCollider(is_trigger=True), Rigidbody(isKinematic=True),
                                                            Goal())
     scene = [floor, goal]
 
@@ -58,7 +58,7 @@ def creat_robot(pos=Vector3(), use_PPO=True, model=None, save=True):
     config = Config(
         obs_dim=320,
         action_dim_continuous=10,
-        rollout_steps=16384,
+        rollout_steps=8192,
         device="cuda",
         hidden_size=256,
         max_steps=1000,
