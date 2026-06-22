@@ -11,8 +11,16 @@ def creat_robot(pos=Vector3(), use_PPO=True, model=None, save=True):
     floor = Object(size=Vector3(100, 1, 100), position=Vector3(0, -0.70, 0)).add_component(BoxCollider(),
                                                                                         Rigidbody(isKinematic=True), Wall())
 
-    goal = Object(position=Vector3(0, 13.8, 1), size=Vector3(0.5, 0.5, 0.5)).add_component(BoxCollider(is_trigger=True), Rigidbody(isKinematic=True),
+    goal1 = Object(name="goal", position=Vector3(0, 14, 1), size=Vector3(0.5, 0.5, 0.5)).add_component(BoxCollider(is_trigger=True), Rigidbody(isKinematic=True),
                                                            Goal())
+    goal2 = Object(name="goal", position=Vector3(-1.5, 0, 2), size=Vector3(0.5, 0.5, 0.5)).add_component(BoxCollider(is_trigger=True),
+                                                                                         Rigidbody(isKinematic=True),
+                                                                                         Goal())
+    goal3 = Object(name="goal", position=Vector3(-1.5, 0, -0.5), size=Vector3(0.5, 0.5, 0.5)).add_component(BoxCollider(is_trigger=True),
+                                                                                         Rigidbody(isKinematic=True),
+                                                                                         Goal())
+    goal = Object(size=Vector3(), position=Vector3(0,14,1), children=[goal1, goal2, goal3])
+
     scene = [floor, goal]
 
     feet = Object(size=Vector3(2.6, 0.5, 1.2), position=Vector3(-.5,0,-0.3), name="feet").add_component(BoxCollider(), Rigidbody(mass=0.01))
@@ -56,15 +64,17 @@ def creat_robot(pos=Vector3(), use_PPO=True, model=None, save=True):
     hip_bone = Object(position=Vector3(0,14,1), size=Vector3(.5, .5, 2), name="hip_bone").add_component(BoxCollider(), Rigidbody(mass=0.02), FixedJoint(hip_l), FixedJoint(hip2))
 
     config = Config(
-        obs_dim=320,
+        obs_dim=300,
         action_dim_continuous=10,
-        rollout_steps=8192,
+        rollout_steps=1024,
         device="cuda",
         hidden_size=256,
         max_steps=1000,
         best_model_path="walk.pt" if save else None,
         entropy_coef = 0.001,
-        max_episode_reward = 30
+        max_episode_reward = 30,
+        # learning_rate=1e-4,
+
 
     )
 
@@ -77,7 +87,7 @@ def creat_robot(pos=Vector3(), use_PPO=True, model=None, save=True):
 
     legs = Object(size=Vector3(), children=[leg, leg2, hip_bone] + scene)
     if use_PPO:
-        legs.add_component(agent_component, Walk(goal))
+        legs.add_component(agent_component, Walk(goal, scene))
     else:
         legs.add_component(ServoMovment())
 

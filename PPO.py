@@ -388,14 +388,7 @@ class Trainer:
         self.episode_rewards.append(float(episode_reward))
         self.episode_lengths.append(int(episode_length))
 
-        average_reward = self.get_average_reward()
-        if average_reward is not None and average_reward > self.best_average_reward:
-            self.best_average_reward = average_reward
-            if self.config.best_model_path is not None:
-                self.save(self.config.best_model_path)
 
-        if self.training_updates % 10 == 0 and self.config.best_model_path is not None:
-            self.save(self.config.best_model_path[:-3] + "latest" + ".pt")
 
 
     def get_average_reward(self) -> Optional[float]:
@@ -512,6 +505,14 @@ class Trainer:
                 updates += 1
 
         self.buffer.clear()
+        average_reward = self.get_average_reward()
+        if average_reward is not None and average_reward > self.best_average_reward:
+            self.best_average_reward = average_reward
+            if self.config.best_model_path is not None:
+                self.save(self.config.best_model_path)
+
+        if self.training_updates % 10 == 0 and self.config.best_model_path is not None:
+            self.save(self.config.best_model_path[:-3] + "latest" + ".pt")
         self.training_updates += 1
 
         return {
