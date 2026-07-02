@@ -7,19 +7,19 @@ from Names_types import Goal, Wall
 from bereshit.addons.PPO import Trainer, Agent, Config
 from ServoMovment import ServoMovment
 
-def creat_robot(pos=Vector3(), use_PPO=True, model=None, save=True):
+def creat_robot(pos=Vector3(), use_PPO=True, model=None, save=True, load_optimizer=True):
     floor = Object(size=Vector3(100, 1, 100), position=Vector3(0, -0.70, 0)).add_component(BoxCollider(),
                                                                                         Rigidbody(isKinematic=True), Wall())
 
     goal1 = Object(name="goal", position=Vector3(0, 14, 1), size=Vector3(0.5, 0.5, 0.5)).add_component(BoxCollider(is_trigger=True), Rigidbody(isKinematic=True),
                                                            Goal())
-    goal2 = Object(name="goal", position=Vector3(-1.5, 0, 2), size=Vector3(0.5, 0.5, 0.5)).add_component(BoxCollider(is_trigger=True),
-                                                                                         Rigidbody(isKinematic=True),
-                                                                                         Goal())
-    goal3 = Object(name="goal", position=Vector3(-1.5, 0, -0.5), size=Vector3(0.5, 0.5, 0.5)).add_component(BoxCollider(is_trigger=True),
-                                                                                         Rigidbody(isKinematic=True),
-                                                                                         Goal())
-    goal = Object(size=Vector3(), position=Vector3(0,14,1), children=[goal1, goal2, goal3])
+    # goal2 = Object(name="goal", position=Vector3(-1.5, 0, 2), size=Vector3(0.5, 0.5, 0.5)).add_component(BoxCollider(is_trigger=True),
+    #                                                                                      Rigidbody(isKinematic=True),
+    #                                                                                      Goal())
+    # goal3 = Object(name="goal", position=Vector3(-1.5, 0, -0.5), size=Vector3(0.5, 0.5, 0.5)).add_component(BoxCollider(is_trigger=True),
+    #                                                                                      Rigidbody(isKinematic=True),
+    #                                                                                      Goal())
+    goal = Object(size=Vector3(), position=Vector3(0,14,1), children=[goal1])
 
     scene = [floor, goal]
 
@@ -64,23 +64,23 @@ def creat_robot(pos=Vector3(), use_PPO=True, model=None, save=True):
     hip_bone = Object(position=Vector3(0,14,1), size=Vector3(.5, .5, 2), name="hip_bone").add_component(BoxCollider(), Rigidbody(mass=0.02), FixedJoint(hip_l), FixedJoint(hip2))
 
     config = Config(
-        obs_dim=300,
+        obs_dim=295,
         action_dim_continuous=10,
-        rollout_steps=1024,
+        rollout_steps = 1024,
         device="cuda",
         hidden_size=256,
         max_steps=1000,
         best_model_path="walk.pt" if save else None,
         entropy_coef = 0.001,
         max_episode_reward = 30,
-        # learning_rate=1e-4,
+        # learning_rate = 5e-5,
 
 
     )
 
     trainer = Trainer(config)
     if model:
-        trainer.load(model)
+        trainer.load(model, load_optimizer=load_optimizer)
 
 
     agent_component = Agent(trainer, agent_id=0)
