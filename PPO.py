@@ -41,8 +41,7 @@ import torch.optim as optim
 from torch.distributions import Categorical, Normal
 
 
-from bereshit.Vector3 import Vector3
-from bereshit.Quaternion import Quaternion
+from bereshit import Vector3, Quaternion, Component
 
 @dataclass
 class Config:
@@ -593,20 +592,44 @@ class Trainer:
         continuous_action, discrete_action, _ = self.act(observation, deterministic=deterministic)
         return {"continuous": continuous_action, "discrete": discrete_action}
 
+class Academy:
+    __ID = 0
+    __trainer = Trainer(Config(obs_dim=1, action_dim_discrete=1, rollout_steps=1024, device="cpu", best_model_path="model.pt", max_steps=1024))
+    __Agents = []
+    def __init__(self, trainer):
+        self.Agents = []
+        self.trainer = trainer
+    @staticmethod
+    def setup_trainer(config):
+        Academy.__trainer = Trainer(config)
 
-class Agent:
+    @staticmethod
+    def get_trainer():
+        return Academy.__trainer
+
+    @staticmethod
+    def load_model(model):
+        Academy.__trainer.load(model)
+
+    @staticmethod
+    def AddAgent(agent):
+        agent.agent_id = Academy.__ID
+        Academy.__ID += 1
+        agent.trainer = Academy.__trainer
+        Academy.__Agents.append(agent)
+
+class Agent(Component):
     """
     Game-object component class.
 
     Attach one Agent to each game object.
     All agents may share the same Trainer to learn one shared policy.
     """
-    ID = 0
-    def __init__(self, trainer: Trainer, agent_id: Union[int, str]):
-        self.trainer = trainer
-        self.agent_id = Agent.ID
-        Agent.ID += 1
-
+    def __init__(self):
+        self.trainer = None
+        self.agent_id = 0
+        super(Agent, self).__init__()
+        Academy.AddAgent(self)
         self.episode_reward: float = 0.0
         self.pending_reward: float = 0.0
         self.episode_step: int = 0
@@ -619,7 +642,7 @@ class Agent:
         self.collected_observations = 0
 
     def Start(self):
-        self.OnEpisodeBegin()
+        self.__OnEpisodeBegin()
 
     def add_observation(self, observation):
         if type(observation) == Vector3:
@@ -637,8 +660,9 @@ class Agent:
             self.observations[self.collected_observations] = observation
             self.collected_observations += 1
 
-
-    def OnEpisodeBegin(self) -> None:
+    def OnEpisodeBegin(self):
+        pass
+    def __OnEpisodeBegin(self) -> None:
         """
         Call this from the engine when this agent/game object starts or resets an episode.
         Unity-style capitalization is kept because you requested OnEpisodeBegin.
@@ -650,10 +674,7 @@ class Agent:
         self.last_observation = None
         self.last_ppo_data = None
         self.has_active_action = False
-        if hasattr(self, "parent"):
-            for component in self.parent.components.values():
-                if hasattr(component, 'OnEpisodeBegin') and component != self:
-                    component.OnEpisodeBegin()
+        self.OnEpisodeBegin()
 
     def get_continuous_actions(self, deterministic: bool = False) -> np.ndarray:
         if self.collected_observations != self.trainer.config.obs_dim:
@@ -753,7 +774,11 @@ class Agent:
     def add_reward(self, reward: float) -> None:
         """Add reward to this agent's current step and episode total."""
         r = float(reward)
-        if self.trainer.config.max_episode_reward and abs(self.episode_reward) + abs(r) < self.trainer.config.max_episode_reward:
+        if self.trainer.config.max_episode_reward:
+            if abs(self.episode_reward) + abs(r) < self.trainer.config.max_episode_reward:
+                self.pending_reward += r
+                self.episode_reward += r
+        else:
             self.pending_reward += r
             self.episode_reward += r
 
@@ -791,7 +816,7 @@ class Agent:
 
         if not self.trainer.inference_only:
             self.trainer.record_episode_result(final_episode_reward, final_episode_length)
-        self.OnEpisodeBegin()
+        self.__OnEpisodeBegin()
 
 
 # Example pure-Python engine setup:

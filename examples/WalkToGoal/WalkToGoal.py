@@ -2,12 +2,13 @@ import random
 
 import numpy as np
 
-from bereshit import Vector3
+from bereshit import Vector3, Component
+from bereshit.addons.PPO import Agent
 
 
-class Walk:
+class Walk(Agent):
     def __init__(self, goal, scene):
-        self.Agent = None
+        super(Walk, self).__init__()
         self.goal = goal
         self.dt = 0
         self.size = 1
@@ -22,8 +23,6 @@ class Walk:
         self.scene = scene
 
     def attach(self, parent):
-        self.Agent = parent.get_component("Agent")
-        self.trainer = self.Agent.trainer
         self.body_parts = parent.get_all_children_physics()
         self.body_parts = [item for item in self.body_parts if item not in self.scene]
         self.body_parts = [item for item in self.body_parts if item not in self.goal.children]
@@ -31,13 +30,13 @@ class Walk:
         self.servos = []
         self.feets = parent.search_by_name("feet")
         self.hip_bone = parent.search_by_name("hip_bone")[0]
-        self.hip_bone.add_component(Legs(self.Agent, self))
+        self.hip_bone.add_component(Legs(self, self))
 
         for child in self.body_parts:
             if child.get_component("Servo"):
                 self.servos.append(child)
             if child not in self.feets:
-                child.add_component(BodyPart(self.Agent, self))
+                child.add_component(BodyPart(self, self))
 
     def OnEpisodeBegin(self):
         self.parent.reset_to_default()
@@ -68,7 +67,7 @@ class Walk:
         self.dt += dt
         self.set_body_val()
         self.add_observations()
-        action = self.Agent.get_continuous_actions()
+        action = self.get_continuous_actions()
         self.move(action, dt)
         # self.addRewardByVelocity()
         self.addRewardByDistance()
@@ -84,9 +83,9 @@ class Walk:
         # if self.hip_bone.position.y > 14.2:
         #     self.Agent.add_reward(-1.0)
         if self.hip_bone.position.y < 13:
-            self.Agent.add_reward(-0.5)
+            self.add_reward(-0.5)
             self.fall = True
-            self.Agent.end_episode()
+            self.end_episode()
         # up_direction = self.goal.position.y - self.hip_bone.position.y
         #
         # if up_direction > 0.009:
@@ -135,13 +134,13 @@ class Walk:
         speed_error = abs(speed_toward_goal - self.target_speed)
         speed_reward = 1.0 - np.clip(speed_error / self.target_speed, 0, 1)
 
-        self.Agent.add_reward(speed_reward * 0.003)
+        self.add_reward(speed_reward * 0.003)
 
         up_direction = self.goal.position.y - self.hip_bone.position.y
         up_velocity = self.hip_bone.Rigidbody.velocity.y
 
         reward = np.sign(up_direction) * up_velocity
-        self.Agent.add_reward(np.clip(reward, -1, 1) * 0.005)
+        self.add_reward(np.clip(reward, -1, 1) * 0.005)
 
 
 
@@ -151,7 +150,7 @@ class Walk:
         progress = self.lastDistance - dis
         self.lastDistance = dis
 
-        self.Agent.add_reward(progress * 0.005)
+        self.add_reward(progress * 0.005)
 
     def set_body_val(self):
         total_mass = 0.0
@@ -183,21 +182,21 @@ class Walk:
 
     def add_observations(self):
         for body_part in self.body_parts:
-            self.Agent.add_observation(body_part.local_position)
-            self.Agent.add_observation(body_part.quaternion.normalized())
-            self.Agent.add_observation(body_part.Rigidbody.velocity)
-            self.Agent.add_observation(body_part.Rigidbody.angular_velocity)
+            self.add_observation(body_part.local_position)
+            self.add_observation(body_part.quaternion.normalized())
+            self.add_observation(body_part.Rigidbody.velocity)
+            self.add_observation(body_part.Rigidbody.angular_velocity)
         for servo in self.servos:
-            self.Agent.add_observation(servo.ServoController.target_angle)
+            self.add_observation(servo.ServoController.target_angle)
 
 
-        self.Agent.add_observation(self.goal.children[0].local_position)
+        self.add_observation(self.goal.children[0].local_position)
 
-        self.Agent.add_observation(self.body_vel)
-        self.Agent.add_observation(self.target_speed)
-        self.Agent.add_observation(self.parent.findTheCenterOfMass())
-        self.Agent.add_observation(self.feets[0].Collider.stay)
-        self.Agent.add_observation(self.feets[1].Collider.stay)
+        self.add_observation(self.body_vel)
+        self.add_observation(self.target_speed)
+        self.add_observation(self.parent.findTheCenterOfMass())
+        self.add_observation(self.feets[0].Collider.stay)
+        self.add_observation(self.feets[1].Collider.stay)
 
     def get_average_position(self):
         average = Vector3()
@@ -227,8 +226,9 @@ class Walk:
         return vec
 
 
-class BodyPart:
+class BodyPart(Component):
     def __init__(self, agent, other):
+        super(BodyPart, self).__init__()
         self.Agent = agent
         self.other = other
 
@@ -239,9 +239,10 @@ class BodyPart:
             self.other.fall = True
 
 
-class Legs:
+class Legs(Component):
 
     def __init__(self, agent, other):
+        super(Legs, self).__init__()
         self.Agent = agent
         self.other = other
         self.dt = 0

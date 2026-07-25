@@ -1,20 +1,18 @@
-from bereshit.addons.PPO import Config, Trainer, Agent
-from bereshit import Object, Vector3, Core, Camera, BoxCollider, Rigidbody
+from bereshit.addons.PPO import Config, Trainer, Agent, Academy
+from bereshit import GameObject, Vector3, Core, Camera, BoxCollider, Rigidbody
 from bereshit.addons.essentials import FPS_cam, CamController
-from Names_types import Wall, Goal
+from bereshit.addons.PPO.essentials import Goal, Wall
 from MoveToGoal import MoveToGoal
 
-cam = Object(position=Vector3(0, 0, -8)).add_component(Camera(), CamController(), FPS_cam())
+cam = GameObject(position=Vector3(0, 5, 0), rotation=Vector3(90,0,0)).add_component(Camera(), CamController(), FPS_cam())
 
+floor = GameObject(position=Vector3(0,-1,0), size=Vector3(10,1,10)).add_component(BoxCollider(), Rigidbody(isKinematic=True, friction_coefficient=1))
+wall1 = GameObject(position=Vector3(-5.5,0,0), size=Vector3(1,1,10)).add_component(BoxCollider(), Rigidbody(isKinematic=True), Wall())
+wall2 = GameObject(position=Vector3(5.5,0,0), size=Vector3(1,1,10)).add_component(BoxCollider(), Rigidbody(isKinematic=True), Wall())
+wall3 = GameObject(position=Vector3(0,0,-5.5), size=Vector3(10,1,1)).add_component(BoxCollider(), Rigidbody(isKinematic=True), Wall())
+wall4 = GameObject(position=Vector3(0,0,5.5), size=Vector3(10,1,1)).add_component(BoxCollider(), Rigidbody(isKinematic=True), Wall())
 
-
-floor = Object(position=Vector3(0,-1,0), size=Vector3(20,1,20)).add_component(BoxCollider(), Rigidbody(isKinematic=True, friction_coefficient=1))
-wall1 = Object(position=Vector3(-10,0,0), size=Vector3(1,1,20)).add_component(BoxCollider(), Rigidbody(isKinematic=True), Wall())
-wall2 = Object(position=Vector3(10,0,0), size=Vector3(1,1,20)).add_component(BoxCollider(), Rigidbody(isKinematic=True), Wall())
-wall3 = Object(position=Vector3(0,0,-10), size=Vector3(20,1,1)).add_component(BoxCollider(), Rigidbody(isKinematic=True), Wall())
-wall4 = Object(position=Vector3(0,0,10), size=Vector3(20,1,1)).add_component(BoxCollider(), Rigidbody(isKinematic=True), Wall())
-
-goal = Object(position=Vector3(2,0,0)).add_component(BoxCollider(), Rigidbody(isKinematic=True), Goal())
+goal = GameObject(position=Vector3(2,0,0)).add_component(BoxCollider(), Rigidbody(isKinematic=True), Goal())
 
 config = Config(
     obs_dim=6,
@@ -23,13 +21,11 @@ config = Config(
     device="cpu",
     # max_steps=30
 )
+Academy.setup_trainer(config)
+Academy.load_model("model.pt")
 
-trainer = Trainer(config)
-trainer.load("model.pt")
-
-agent_component = Agent(trainer, agent_id=0)
-agent = Object().add_component(BoxCollider(), Rigidbody(Freeze_Rotation=Vector3(1,1,1)), agent_component, MoveToGoal(goal))
+agent = GameObject().add_component(BoxCollider(), Rigidbody(Freeze_Rotation=Vector3(1,1,1)), MoveToGoal(goal))
 
 scene = [floor, wall1, wall2, wall3, wall4, agent, goal]
 
-Core.run([cam] + scene, speed=10, Render=True)
+Core.run([cam] + scene, speed=1, Render=True)

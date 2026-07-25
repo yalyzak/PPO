@@ -1,32 +1,28 @@
-from bereshit.addons.PPO import Agent, ActorCritic
-from bereshit import Object, Vector3, Core, Camera, BoxCollider, Rigidbody
-from bereshit.addons.essentials import FPS_cam, CamController
+from bereshit.addons.PPO import Agent
+from bereshit import Vector3
 import random
 
 
-class MoveToGoal:
+class MoveToGoal(Agent):
     def __init__(self, goal):
-        self.Agent = None
+        super(MoveToGoal, self).__init__()
         self.goal = goal
         self.speed = 500
         self.dt = 0
 
-    def attach(self, parent):
-        self.Agent = parent.get_component("Agent")
-        self.trainer = self.Agent.trainer
-
     def OnEpisodeBegin(self):
         self.parent.reset_to_default()
         self.goal.reset_to_default()
-        self.parent.local_position += Vector3(random.uniform(-4, 4), 0, random.uniform(-4, 4))
-        self.goal.local_position += Vector3(random.uniform(-4, 4), 0, random.uniform(-4, 4))
+        self.parent.transform.local_position += Vector3(random.uniform(-3, 3), 0, random.uniform(-3, 3))
+        self.goal.transform.local_position += Vector3(random.uniform(-3, 3), 0, random.uniform(-3, 3))
 
     def Update(self, dt):
         self.dt += dt
-        pos = self.parent.local_position
-        pos2 = self.goal.local_position
-        obs = [pos.x, pos.y, pos.z, pos2.x, pos2.y, pos2.z]
-        action = self.Agent.get_continuous_actions(obs)
+        pos = self.parent.transform.local_position
+        pos2 = self.goal.transform.local_position
+        self.add_observation(pos)
+        self.add_observation(pos2)
+        action = self.get_continuous_actions()
         self.Move(action[0], action[1], dt)
         self.addRewardByDistance(pos, pos2)
         if self.dt > 20:
@@ -42,12 +38,12 @@ class MoveToGoal:
     def addRewardByDistance(self, pos, pos2):
         distance = (pos - pos2).magnitude()
         reward = -distance * 0.01
-        self.Agent.add_reward(reward)
+        self.add_reward(reward)
 
     def OnCollisionEnter(self, Collision):
         if Collision.other.parent.get_component("Wall"):
-            self.Agent.add_reward(-1)
-            self.Agent.end_episode()
+            self.add_reward(-1)
+            self.end_episode()
         elif Collision.other.parent.get_component("Goal"):
-            self.Agent.add_reward(1)
-            self.Agent.end_episode()
+            self.add_reward(1)
+            self.end_episode()

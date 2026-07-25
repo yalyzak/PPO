@@ -1,10 +1,11 @@
 import math
 import keyboard
-from bereshit import Vector3, Quaternion, HingeJoint
+from bereshit import Vector3, Quaternion, HingeJoint, Component
 
 
-class ServoController:
+class ServoController(Component):
     def __init__(self, other, max_rotation=90, min_rotation=-90):
+        super(ServoController, self).__init__()
         self.target_angle = 0.0
 
         self.max_speed = 6.54

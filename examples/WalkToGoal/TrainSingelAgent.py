@@ -1,8 +1,8 @@
-from bereshit import Object, Vector3, Core, Camera
+from bereshit import GameObject, Vector3, Core, Camera
 from bereshit.addons.PPO.examples.WalkToGoal.creat_robot import creat_robot
 from bereshit.addons.essentials import CamController, FPS_cam
 
-cam = Object(position=Vector3(8, 0, 0), rotation=Vector3(0,-90,0)).add_component(Camera(shading="material preview"), CamController(), FPS_cam())
+cam = GameObject(position=Vector3(8, 0, 0), rotation=Vector3(0,-90,0)).add_component(Camera(shading="material preview"), CamController(), FPS_cam())
 
 legs = [creat_robot(Vector3(0,0,i * 200)) for i in range(1)]
 
