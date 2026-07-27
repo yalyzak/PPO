@@ -7,4 +7,4 @@ cam = GameObject(position=Vector3(8, 0, 0), rotation=Vector3(0,-90,0)).add_compo
 legs = [creat_robot(Vector3(0,0,i * 200)) for i in range(1)]
 
 
-Core.run(legs + [cam], Render=True, tick=1/240, speed=1)
+Core.run(legs + [cam], Render=True, tick=1/240)

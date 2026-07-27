@@ -86,7 +86,7 @@ def creat_robot(pos=Vector3(), use_PPO=True, model=None, save=True, load_optimiz
         legs.add_component(ServoMovment())
 
 
-    legs.local_position += pos
+    legs.transform.local_position += pos
 
     legs.set_default()
 

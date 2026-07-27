@@ -57,7 +57,7 @@ class Walk(Agent):
         pos = Vector3(random.uniform(-1, 1), 0, random.uniform(-1, 1)).normalized() * self.size
         pos.y = 14
         pos.z += 1.5
-        self.goal.local_position = pos
+        self.goal.transform.local_position = pos
 
         # rot = Vector3(0, random.uniform(-180, 180), 0)
         # self.goal.local_rotation = rot
@@ -76,13 +76,13 @@ class Walk(Agent):
         # self.Agent.add_reward(-0.0000005)
 
     def addRewardByPlacement(self):
-        foot1_grounded = self.feets[0].Collider.stay or self.feets[0].Collider.enter
-        foot2_grounded = self.feets[1].Collider.stay or self.feets[1].Collider.enter
+        foot1_grounded = self.feets[0].BoxCollider.stay or self.feets[0].BoxCollider.enter
+        foot2_grounded = self.feets[1].BoxCollider.stay or self.feets[1].BoxCollider.enter
 
         # punish jumping too high
         # if self.hip_bone.position.y > 14.2:
         #     self.Agent.add_reward(-1.0)
-        if self.hip_bone.position.y < 13:
+        if self.hip_bone.transform.position.y < 13:
             self.add_reward(-0.5)
             self.fall = True
             self.end_episode()
@@ -112,7 +112,7 @@ class Walk(Agent):
         #     self.Agent.add_reward(0.005)
 
     def addRewardByVelocity(self):
-        direction = self.goal.position - self.hip_bone.position
+        direction = self.goal.transform.position - self.hip_bone.transform.position
         direction.y = 0
 
         distance = direction.magnitude()
@@ -136,7 +136,7 @@ class Walk(Agent):
 
         self.add_reward(speed_reward * 0.003)
 
-        up_direction = self.goal.position.y - self.hip_bone.position.y
+        up_direction = self.goal.transform.position.y - self.hip_bone.transform.position.y
         up_velocity = self.hip_bone.Rigidbody.velocity.y
 
         reward = np.sign(up_direction) * up_velocity
@@ -168,7 +168,7 @@ class Walk(Agent):
             servo.ServoController.move(action[i] * self.speed, dt)
 
     def getDistance(self):
-        hip_dis = (self.hip_bone.position - self.goal.children[0].position).magnitude()
+        hip_dis = (self.hip_bone.transform.position - self.goal.children[0].transform.position).magnitude()
 
         # foot1_vec = self.feets[0].position - self.goal.children[1].position
         # foot1_vec.y = 0
@@ -182,27 +182,27 @@ class Walk(Agent):
 
     def add_observations(self):
         for body_part in self.body_parts:
-            self.add_observation(body_part.local_position)
-            self.add_observation(body_part.quaternion.normalized())
+            self.add_observation(body_part.transform.local_position)
+            self.add_observation(body_part.transform.quaternion.normalized())
             self.add_observation(body_part.Rigidbody.velocity)
             self.add_observation(body_part.Rigidbody.angular_velocity)
         for servo in self.servos:
             self.add_observation(servo.ServoController.target_angle)
 
 
-        self.add_observation(self.goal.children[0].local_position)
+        self.add_observation(self.goal.children[0].transform.local_position)
 
         self.add_observation(self.body_vel)
         self.add_observation(self.target_speed)
         self.add_observation(self.parent.findTheCenterOfMass())
-        self.add_observation(self.feets[0].Collider.stay)
-        self.add_observation(self.feets[1].Collider.stay)
+        self.add_observation(self.feets[0].BoxCollider.stay)
+        self.add_observation(self.feets[1].BoxCollider.stay)
 
     def get_average_position(self):
         average = Vector3()
         length = len(self.body_parts)
         for part in self.body_parts:
-            average += part.position
+            average += part.transform.position
         return average / length
 
     def printData(self):

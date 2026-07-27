@@ -33,4 +33,4 @@ main = GameObject(children=[floor, wall1, wall2, wall3, wall4, goal, agent], siz
 
 scene = [main]
 
-Core.run_max_speed(scene, Render=False, MaxTime=60*60) # train for 1 simulated hour
+Core.run_max_speed(scene, Render=False, MaxTime=60*60)  # train for 1 simulated hour

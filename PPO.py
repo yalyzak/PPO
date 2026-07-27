@@ -644,6 +644,9 @@ class Agent(Component):
     def Start(self):
         self.__OnEpisodeBegin()
 
+    def collected_observations_length(self):
+        return self.collected_observations
+
     def add_observation(self, observation):
         if type(observation) == Vector3:
             self.observations[self.collected_observations] = observation.x
@@ -656,9 +659,11 @@ class Agent(Component):
             self.observations[self.collected_observations + 2] = observation.z
             self.observations[self.collected_observations + 3] = observation.w
             self.collected_observations += 4
-        else:
+        elif isinstance(observation, (int, float, bool, str, bytes, complex, np.generic)):
             self.observations[self.collected_observations] = observation
             self.collected_observations += 1
+        else:
+            raise Exception(f"observation type: {type(observation)} is not acceptable")
 
     def OnEpisodeBegin(self):
         pass

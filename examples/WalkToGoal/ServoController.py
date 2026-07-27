@@ -21,7 +21,7 @@ class ServoController(Component):
         self.target_angle = 0.0
 
     def move(self, input_value, dt):
-        joint = self.parent.get_component(HingeJoint)
+        joint = self.parent.HingeJoint
         self._axis = joint.axis_world.normalized()
 
         self.target_angle += input_value * self.input_speed * dt
@@ -31,10 +31,10 @@ class ServoController(Component):
         )
 
     def fix(self, dt):
-        axis = self.parent.get_component(HingeJoint).axis_world.normalized()
+        axis = self.parent.HingeJoint.axis_world.normalized()
         rb = self.parent.Rigidbody
 
-        relative_q = self.other.quaternion.conjugate() * self.parent.quaternion
+        relative_q = self.other.transform.quaternion.conjugate() * self.parent.transform.quaternion
         current_angle = relative_q.to_euler().dot(axis)
 
         error = self.target_angle - current_angle
@@ -62,10 +62,10 @@ class ServoController(Component):
         if abs(error) < 0.3 and abs(angular_velocity) < 0.2:
             torque = 0
 
-        self.apply_angular_impulse(torque * dt * axis)
+        self.parent.Rigidbody.apply_angular_impulse(torque * dt * Vector3(1,1,1), axis)
 
     def clamp_rotation(self):
-        self.parent.quaternion = max(min(self.parent.quaternion.to_euler(), self.max_rotation), -self.max_rotation)
+        self.parent.transform.quaternion = max(min(self.parent.transform.quaternion.to_euler(), self.max_rotation), -self.max_rotation)
 
     def clamp_speed(self):
         self.parent.Rigidbody.angular_velocity.z = max(min(self.parent.Rigidbody.angular_velocity.z, self.max_speed),
