@@ -1,7 +1,7 @@
 import keyboard
+from bereshit import Component
 
-
-class ServoMovment:
+class ServoMovment(Component):
     def attach(self, parent):
         self.servos = parent.search_by_component("Servo")
         self.feets = parent.search_by_name("feet")
@@ -47,7 +47,6 @@ class ServoMovment:
         self.hip1s[0].ServoController.move(2 * self.degres, dt)
 
     def Update(self, dt):
-        print(self.parent.findTheCenterOfMass() - self.feets[1].position)
 
         if keyboard.is_pressed("e"):
             self.leanRight(dt)

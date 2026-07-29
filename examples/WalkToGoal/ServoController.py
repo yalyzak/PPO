@@ -62,7 +62,7 @@ class ServoController(Component):
         if abs(error) < 0.3 and abs(angular_velocity) < 0.2:
             torque = 0
 
-        self.parent.Rigidbody.apply_angular_impulse(torque * dt * Vector3(1,1,1), axis)
+        self.parent.Rigidbody.apply_angular_impulse(torque * dt * axis)
 
     def clamp_rotation(self):
         self.parent.transform.quaternion = max(min(self.parent.transform.quaternion.to_euler(), self.max_rotation), -self.max_rotation)

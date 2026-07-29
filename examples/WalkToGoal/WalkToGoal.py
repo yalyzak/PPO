@@ -41,7 +41,7 @@ class Walk(Agent):
     def OnEpisodeBegin(self):
         self.parent.reset_to_default()
         self.goal.reset_to_default()
-        self.size = 10
+        self.size = 2
         self.next_goal()
         self.lastDistance = self.getDistance()
         self.total_dic = self.getDistance()
@@ -71,7 +71,7 @@ class Walk(Agent):
         self.move(action, dt)
         # self.addRewardByVelocity()
         self.addRewardByDistance()
-        self.addRewardByPlacement()
+        # self.addRewardByPlacement()
         self.printData()
         # self.Agent.add_reward(-0.0000005)
 
@@ -140,7 +140,7 @@ class Walk(Agent):
         up_velocity = self.hip_bone.Rigidbody.velocity.y
 
         reward = np.sign(up_direction) * up_velocity
-        self.add_reward(np.clip(reward, -1, 1) * 0.005)
+        # self.add_reward(np.clip(reward, -1, 1) * 0.005)
 
 
 
@@ -150,7 +150,7 @@ class Walk(Agent):
         progress = self.lastDistance - dis
         self.lastDistance = dis
 
-        self.add_reward(progress * 0.005)
+        self.add_reward(progress * 0.05)
 
     def set_body_val(self):
         total_mass = 0.0
@@ -234,7 +234,7 @@ class BodyPart(Component):
 
     def OnCollisionEnter(self, Collision):
         if Collision.other.parent.get_component("Wall"):
-            self.Agent.add_reward(-2)
+            # self.Agent.add_reward(-2)
             self.Agent.end_episode()
             self.other.fall = True
 
@@ -252,8 +252,10 @@ class Legs(Component):
     def OnCollisionEnter(self, Collision):
         if (Collision.other.parent in self.other.goal.children) and not self.finished:
             self.Agent.add_reward(2)
+            print("asd")
             # self.other.fall = False
-            self.other.next_goal()
+            # self.other.next_goal()
+            self.fall = True
             self.Agent.end_episode()
 
 
