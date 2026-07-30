@@ -373,6 +373,8 @@ class Trainer:
         if len(self.buffer) == 0:
             return None
         stats = self.learn()
+        print("PPO update:", stats)
+        self.print_performance()
         self.last_stats = stats
         return stats
 
@@ -644,7 +646,7 @@ class Agent(Component):
     def Start(self):
         self.__OnEpisodeBegin()
 
-    def collected_observations_length(self):
+    def get_collected_observations_length(self):
         return self.collected_observations
 
     def add_observation(self, observation):
@@ -794,6 +796,7 @@ class Agent(Component):
         self.episode_reward += self.pending_reward - old_pending
 
     def end_episode(self) -> None:
+        self.trainer.learn_if_ready()
         """
         Call when this agent's episode ends.
 

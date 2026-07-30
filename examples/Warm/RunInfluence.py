@@ -31,7 +31,7 @@ config = Config(
         rollout_steps = 1024,
         device="cuda",
         hidden_size=256,
-        max_steps=100,
+        max_steps=300,
         best_model_path="model.pt",
         entropy_coef = 0.001,
         max_episode_reward = 30,
@@ -39,9 +39,10 @@ config = Config(
 )
 
 Academy.setup_trainer(config)
+Academy.load_model("model.pt")
 
 warm = GameObject(size=Vector3(), children=[spine1, spine2, spine3, head]).add_component(MoveToGoal(goal))
 
 scene = GameObject(size=Vector3(), children=[floor, wall1, wall2, wall3, wall4, goal, warm])#.add_component(ServoMovment(spine2))
 
-Core.run_max_speed([scene], Render=False)
+Core.run([scene, cam], Render=True)
