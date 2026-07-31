@@ -31,8 +31,8 @@ class MoveToGoal(Agent):
             self.add_observation(body_part.Rigidbody.velocity)
             self.add_observation(body_part.Rigidbody.angular_velocity)
 
-        if body_part in self.servos:
-            self.add_observation(body_part.ServoController.get_target_angle())
+            if body_part in self.servos:
+                self.add_observation(body_part.ServoController.get_target_angle())
 
         self.add_observation(self.goal.transform.local_position)
 
@@ -43,7 +43,7 @@ class MoveToGoal(Agent):
     def addRewardByDistance(self):
         distance = self.get_distance()
         delta_distance = self.last_distance - distance
-        self.last_distanc = distance
+        self.last_distance = distance
         reward = delta_distance * 0.01
         self.add_reward(reward)
 

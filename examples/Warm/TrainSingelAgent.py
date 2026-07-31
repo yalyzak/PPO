@@ -23,15 +23,17 @@ spine2 = GameObject(position=Vector3(1,0,0), size=Vector3(0.5,0.5,0.5), name="sp
 
 spine3 = GameObject(position=Vector3(2,0,0), size=Vector3(0.5,0.5,0.5), name="spine3").add_component(BoxCollider(), Rigidbody(mass=0.05), Servo(spine2, Vector3(0,1,0), max, min), WallTriggered())
 
-head = GameObject(position=Vector3(3,0,0), size=Vector3(0.5,0.5,0.5), name="head").add_component(BoxCollider(), Rigidbody(mass=0.05), FixedJoint(spine3), GoalReach())
+spine4 = GameObject(position=Vector3(3,0,0), size=Vector3(0.5,0.5,0.5), name="spine3").add_component(BoxCollider(), Rigidbody(mass=0.05), Servo(spine3, Vector3(0,1,0), max, min), WallTriggered())
+
+head = GameObject(position=Vector3(4,0,0), size=Vector3(0.5,0.5,0.5), name="head").add_component(BoxCollider(), Rigidbody(mass=0.05), FixedJoint(spine4), GoalReach())
 
 config = Config(
-        obs_dim=39,
+        obs_dim=51,
         action_dim_continuous=3,
         rollout_steps = 1024,
         device="cuda",
         hidden_size=256,
-        max_steps=100,
+        max_steps=300,
         best_model_path="model.pt",
         entropy_coef = 0.001,
         max_episode_reward = 30,
@@ -40,7 +42,7 @@ config = Config(
 
 Academy.setup_trainer(config)
 
-warm = GameObject(size=Vector3(), children=[spine1, spine2, spine3, head]).add_component(MoveToGoal(goal))
+warm = GameObject(size=Vector3(), children=[spine1, spine2, spine3, spine4, head]).add_component(MoveToGoal(goal))
 
 scene = GameObject(size=Vector3(), children=[floor, wall1, wall2, wall3, wall4, goal, warm])#.add_component(ServoMovment(spine2))
 
