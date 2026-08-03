@@ -71,10 +71,6 @@ class ServoController(Component):
         self.parent.Rigidbody.angular_velocity.z = max(min(self.parent.Rigidbody.angular_velocity.z, self.max_speed),
                                                        -self.max_speed)
 
-    def apply_angular_impulse(self, impulse: Vector3):
-        rb = self.parent.Rigidbody
-        delta_w = rb.Iinv_world() @ impulse.to_np()
-        rb.angular_velocity += Vector3.from_np(delta_w)
 
     def PhysicsUpdate(self, dt):
         self.fix(dt)

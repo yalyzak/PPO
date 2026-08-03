@@ -21,7 +21,7 @@ spine1 = GameObject(size=Vector3(0.5,0.5,0.5), name="spine1").add_component(BoxC
 
 spine2 = GameObject(position=Vector3(1,0,0), size=Vector3(0.5,0.5,0.5), name="spine2").add_component(BoxCollider(), Rigidbody(mass=0.05), Servo(spine1, Vector3(0,1,0), max, min), WallTriggered())
 
-spine3 = GameObject(position=Vector3(2,0,0), size=Vector3(0.5,0.5,0.5), name="spine3").add_component(BoxCollider(), Rigidbody(mass=0.05), Servo(spine2, Vector3(0,1,0), max, min), WallTriggered())
+spine3 = GameObject(position=Vector3(2,0,0), size=Vector3(0.5,0.5,0.5), name="spine3").add_component(BoxCollider(), Rigidbody(mass=0.05), Servo(spine2, Vector3(0,0,1), max, min), WallTriggered())
 
 spine4 = GameObject(position=Vector3(3,0,0), size=Vector3(0.5,0.5,0.5), name="spine3").add_component(BoxCollider(), Rigidbody(mass=0.05), Servo(spine3, Vector3(0,1,0), max, min), WallTriggered())
 
@@ -33,7 +33,7 @@ config = Config(
         rollout_steps = 1024,
         device="cuda",
         hidden_size=256,
-        max_steps=300,
+        max_steps=1000,
         best_model_path="model.pt",
         entropy_coef = 0.001,
         max_episode_reward = 30,

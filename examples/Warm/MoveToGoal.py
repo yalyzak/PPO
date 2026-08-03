@@ -52,6 +52,5 @@ class MoveToGoal(Agent):
         actions = self.get_continuous_actions()
         self.move(actions, dt)
         self.addRewardByDistance()
-        self.add_reward(-0.001)
 
 
