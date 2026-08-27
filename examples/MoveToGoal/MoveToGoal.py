@@ -13,24 +13,20 @@ class MoveToGoal(Agent):
     def OnEpisodeBegin(self):
         self.parent.reset_to_default()
         self.goal.reset_to_default()
-        self.parent.transform.local_position += Vector3(random.uniform(-3, 3), 0, random.uniform(-3, 3))
-        self.goal.transform.local_position += Vector3(random.uniform(-3, 3), 0, random.uniform(-3, 3))
+        self.parent.transform.local_position += Vector3(random.uniform(-10, 10), 0, random.uniform(-10, 10))
+        self.goal.transform.local_position += Vector3(random.uniform(-10, 10), 0, random.uniform(-10, 10))
 
     def Update(self, dt):
-        self.dt += dt
         pos = self.parent.transform.local_position
         pos2 = self.goal.transform.local_position
+        val = self.parent.Rigidbody.velocity
         self.add_observation(pos)
         self.add_observation(pos2)
+        self.add_observation(val)
         action = self.get_continuous_actions()
         self.Move(action[0], action[1], dt)
-        self.addRewardByDistance(pos, pos2)
-        if self.dt > 20:
-            stats = self.trainer.learn_if_ready()
-            if stats is not None:
-                print("PPO update:", stats)
-                self.trainer.print_performance()
-                self.dt = 0
+        # self.addRewardByDistance(pos, pos2)
+
 
     def Move(self, x, z, dt):
         self.parent.Rigidbody.velocity += Vector3(x, 0, z) * dt * self.speed
