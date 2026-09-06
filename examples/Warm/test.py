@@ -1,3 +1,20 @@
+import keyboard
+from bereshit import Component
+
+class Test(Component):
+    def __init__(self, servos):
+        super(Test, self).__init__()
+        self.servos = servos
+
+    def Update(self, dt):
+        if keyboard.is_pressed("h"):
+            for servo in self.servos:
+                servo.ServoController.move(10, dt)
+
+        if keyboard.is_pressed("g"):
+            for servo in self.servos:
+                servo.ServoController.move(-10, dt)
+
 from bereshit.addons.PPO import Config, Academy
 from bereshit import GameObject, Vector3, Core, Camera, BoxCollider, Rigidbody, FixedJoint
 from bereshit.addons.essentials import FPS_cam, CamController, Servo
@@ -16,7 +33,7 @@ wall4 = GameObject(position=Vector3(0,0,15.5), size=Vector3(30,1,1)).add_compone
 max = 45
 min = -45
 speed = 10
-torque = 1
+torque = 5
 
 goal = GameObject(position=Vector3(2,-0.4,2), size=Vector3(0.3, 0.3, 0.3)).add_component(BoxCollider(), Rigidbody(isKinematic=True), Goal())
 
@@ -30,21 +47,12 @@ spine4 = GameObject(position=Vector3(3,0,0), size=Vector3(0.5,0.5,0.5), name="sp
 
 head = GameObject(position=Vector3(4,0,0), size=Vector3(0.5,0.5,0.5), name="head").add_component(BoxCollider(), Rigidbody(mass=0.05), FixedJoint(spine4))
 
-config = Config(
-        obs_dim=75,
-        action_dim_continuous=3,
-        rollout_steps = 10000,
-        device="cpu",
-        max_steps=400,
-        best_model_path="model5.pt",
-        entropy_coef=0.0001,
-)
 
-Academy.setup_trainer(config)
-# Academy.load_model("model4.pt",True, False)
+head.add_component(Test([spine4, spine3, spine3, spine2]))
 
-warm = GameObject(size=Vector3(), children=[spine1, spine2, spine3, spine4, head]).add_component(MoveToGoal(goal))
+warm = GameObject(size=Vector3(), children=[spine1, spine2, spine3, spine4, head])
 
-scene = GameObject(size=Vector3(), children=[floor, wall1, wall2, wall3, wall4, goal, warm])#.add_component(ServoMovment(spine2))
+scene = GameObject(size=Vector3(), children=[floor, wall1, wall2, wall3, wall4, goal, warm, cam])#.add_component(ServoMovment(spine2))
 
-Core.run_max_speed([scene], Render=False, scriptRefreshRate=1/5)
+
+Core.run([scene], Render=True)

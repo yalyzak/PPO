@@ -31,6 +31,6 @@ agent = GameObject().add_component(BoxCollider(), Rigidbody(Freeze_Rotation=Vect
 
 main = GameObject(children=[floor, wall1, wall2, wall3, wall4, goal, agent], size=Vector3(0,0,0))
 
-scene = [main, cam]
+scene = [main]
 
-Core.run_max_speed(scene, Render=False, MaxTime=60*60)  # train for 1 simulated hour
+Core.run_max_speed(scene, Render=False)  # train for 1 simulated hour

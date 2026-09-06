@@ -7,5 +7,5 @@ class WallTriggered(Component):
 
     def OnCollisionEnter(self, Collision):
         if Collision.other.parent.get_component("Wall"):
-            # self.agent.add_reward(-1)
+            self.agent.add_reward(-1)
             self.agent.end_episode()

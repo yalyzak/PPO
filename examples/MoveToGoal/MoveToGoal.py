@@ -8,13 +8,16 @@ class MoveToGoal(Agent):
         super(MoveToGoal, self).__init__()
         self.goal = goal
         self.speed = 500
-        self.dt = 0
+        self.start_dis = 0
+        self.last_distance = 0
 
     def OnEpisodeBegin(self):
         self.parent.reset_to_default()
         self.goal.reset_to_default()
         self.parent.transform.local_position += Vector3(random.uniform(-10, 10), 0, random.uniform(-10, 10))
         self.goal.transform.local_position += Vector3(random.uniform(-10, 10), 0, random.uniform(-10, 10))
+        self.start_dis = (self.parent.transform.local_position - self.goal.transform.local_position).magnitude()
+        self.last_distance = self.start_dis
 
     def Update(self, dt):
         pos = self.parent.transform.local_position
@@ -25,7 +28,7 @@ class MoveToGoal(Agent):
         self.add_observation(val)
         action = self.get_continuous_actions()
         self.Move(action[0], action[1], dt)
-        # self.addRewardByDistance(pos, pos2)
+        self.addRewardByDistance(pos, pos2)
 
 
     def Move(self, x, z, dt):
@@ -33,8 +36,9 @@ class MoveToGoal(Agent):
 
     def addRewardByDistance(self, pos, pos2):
         distance = (pos - pos2).magnitude()
-        reward = -distance * 0.01
+        reward = (self.last_distance - distance) / self.start_dis
         self.add_reward(reward)
+        self.last_distance = distance
 
     def OnCollisionEnter(self, Collision):
         if Collision.other.parent.get_component("Wall"):

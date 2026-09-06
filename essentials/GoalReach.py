@@ -11,4 +11,5 @@ class GoalReach(Component):
             self.agent.end_episode()
         elif Collision.other.parent.get_component("Goal"):
             self.agent.add_reward(1)
+            self.agent.success += 1
             self.agent.end_episode()
