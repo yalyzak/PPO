@@ -7,11 +7,11 @@ Design:
 - Many Agent instances can share one Trainer, so they share one model and learn together.
 - Agents may request actions independently; the trainer keeps separate trajectories per agent.
 - Supports both continuous and discrete actions:
-    - action_dim_continuous: number of continuous action values.
-    - action_dim_discrete: number of discrete action branches/classes.
+    - action_dim_continuous: number of bounded continuous action values.
+    - action_dim_discrete: number of classes in one categorical action.
 
 Expected engine flow per agent:
-    agent.OnEpisodeBegin()
+    agent.begin_episode()  # Start() may call this automatically
     while episode running:
         obs = np.ndarray shape [obs_dim]
         action = agent.get_actions(obs)
@@ -19,8 +19,10 @@ Expected engine flow per agent:
         continuous_action, discrete_action = agent.get_mixed_actions(obs)
         # apply action to game object
         agent.add_reward(reward_delta)
-        # when terminal:
-        agent.end_episode()
+        # after the reward has been added:
+        # - call agent.end_episode() for a real terminal event;
+        # - max_steps episodes end automatically when the next observation
+        #   is passed to agent.get_actions().
 
 Training flow:
     stats = trainer.learn_if_ready()
@@ -31,14 +33,23 @@ Call trainer.learn_if_ready() once per engine frame/tick, or after some number o
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from typing import Deque, Dict, List, Optional, Tuple, Union
 from collections import deque
+from numbers import Real
 
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.distributions import Categorical, Normal
+from torch.distributions import (
+    AffineTransform,
+    Categorical,
+    Distribution,
+    Normal,
+    TanhTransform,
+    TransformedDistribution,
+)
 
 
 from bereshit import Vector3, Quaternion, Component
@@ -63,26 +74,54 @@ class Config:
     continuous_action_high: float = 1.0
     device: str = "cpu"
     performance_window: int = 100
-    max_episode_reward:  Optional[int] = None
+    max_episode_reward: Optional[float] = None
     best_model_path: Optional[str] = None
     max_steps: Optional[int] = None
 
     def __post_init__(self) -> None:
+        if self.obs_dim <= 0:
+            raise ValueError("obs_dim must be > 0")
         if self.action_dim_continuous < 0:
             raise ValueError("action_dim_continuous must be >= 0")
         if self.action_dim_discrete < 0:
             raise ValueError("action_dim_discrete must be >= 0")
         if self.action_dim_continuous == 0 and self.action_dim_discrete == 0:
             raise ValueError("At least one of action_dim_continuous or action_dim_discrete must be > 0")
+        if self.hidden_size <= 0:
+            raise ValueError("hidden_size must be > 0")
+        if not 0.0 <= self.gamma <= 1.0:
+            raise ValueError("gamma must be in [0, 1]")
+        if not 0.0 <= self.gae_lambda <= 1.0:
+            raise ValueError("gae_lambda must be in [0, 1]")
+        if self.continuous_action_low >= self.continuous_action_high:
+            raise ValueError("continuous_action_low must be smaller than continuous_action_high")
+        if self.rollout_steps <= 0:
+            raise ValueError("rollout_steps must be > 0")
+        if self.minibatch_size <= 0:
+            raise ValueError("minibatch_size must be > 0")
+        if self.max_steps is not None and self.max_steps <= 0:
+            raise ValueError("max_steps must be > 0 when specified")
+        if self.max_episode_reward is not None and self.max_episode_reward <= 0:
+            raise ValueError("max_episode_reward must be > 0 when specified")
 
 
 class ActorCritic(nn.Module):
     """Shared policy/value network for continuous, discrete, or mixed actions."""
 
-    def __init__(self, obs_dim: int, action_dim_continuous: int, action_dim_discrete: int, hidden_size: int):
+    def __init__(
+            self,
+            obs_dim: int,
+            action_dim_continuous: int,
+            action_dim_discrete: int,
+            hidden_size: int,
+            continuous_action_low: float,
+            continuous_action_high: float,
+    ):
         super().__init__()
         self.action_dim_continuous = action_dim_continuous
         self.action_dim_discrete = action_dim_discrete
+        self.continuous_action_low = float(continuous_action_low)
+        self.continuous_action_high = float(continuous_action_high)
 
         self.backbone = nn.Sequential(
             nn.Linear(obs_dim, hidden_size),
@@ -111,7 +150,11 @@ class ActorCritic(nn.Module):
 
         if self.action_dim_continuous > 0:
             mean = self.actor_mean(x)
-            std = torch.exp(self.log_std).expand_as(mean)
+            # Keep the standard deviation finite even if an unstable update
+            # temporarily pushes log_std to an extreme value.
+            std = torch.exp(
+                self.log_std.clamp(math.log(1e-4), math.log(2.0))
+            ).expand_as(mean)
             out["continuous_mean"] = mean
             out["continuous_std"] = std
 
@@ -121,14 +164,26 @@ class ActorCritic(nn.Module):
         return out
 
     def distributions_and_value(self, obs: torch.Tensor) -> Tuple[
-        Optional[Normal], Optional[Categorical], torch.Tensor]:
+        Optional[Distribution], Optional[Categorical], torch.Tensor]:
         out = self.forward(obs)
 
         continuous_dist = None
         discrete_dist = None
 
         if self.action_dim_continuous > 0:
-            continuous_dist = Normal(out["continuous_mean"], out["continuous_std"])
+            # The environment receives a bounded action. Model that bounded
+            # distribution directly so PPO evaluates the action that was
+            # actually applied, rather than an unclipped latent Normal sample.
+            base_dist = Normal(out["continuous_mean"], out["continuous_std"])
+            midpoint = (self.continuous_action_high + self.continuous_action_low) / 2.0
+            half_range = (self.continuous_action_high - self.continuous_action_low) / 2.0
+            continuous_dist = TransformedDistribution(
+                base_dist,
+                [
+                    TanhTransform(cache_size=1),
+                    AffineTransform(loc=midpoint, scale=half_range),
+                ],
+            )
 
         if self.action_dim_discrete > 0:
             discrete_dist = Categorical(logits=out["discrete_logits"])
@@ -168,6 +223,8 @@ class Trainer:
             action_dim_continuous=config.action_dim_continuous,
             action_dim_discrete=config.action_dim_discrete,
             hidden_size=config.hidden_size,
+            continuous_action_low=config.continuous_action_low,
+            continuous_action_high=config.continuous_action_high,
         ).to(self.device)
         self.optimizer = optim.Adam(self.model.parameters(), lr=config.learning_rate)
         self.buffer = RolloutBuffer()
@@ -196,6 +253,31 @@ class Trainer:
             raise ValueError(f"Expected observation size {self.config.obs_dim}, got shape {tuple(obs.shape)}")
         return obs
 
+    def _clamp_continuous_action(self, action: torch.Tensor) -> torch.Tensor:
+        """Keep bounded actions away from +/-1 before evaluating tanh log-probs."""
+        scale = max(
+            1.0,
+            abs(self.config.continuous_action_low),
+            abs(self.config.continuous_action_high),
+        )
+        eps = min(
+            float(torch.finfo(action.dtype).eps) * scale * 4.0,
+            (self.config.continuous_action_high - self.config.continuous_action_low) * 0.25,
+        )
+        return action.clamp(
+            self.config.continuous_action_low + eps,
+            self.config.continuous_action_high - eps,
+        )
+
+    @staticmethod
+    def _require_finite(name: str, tensor: torch.Tensor) -> None:
+        if not torch.isfinite(tensor).all():
+            raise FloatingPointError(f"{name} contains NaN or infinite values")
+
+    def _require_finite_model(self) -> None:
+        for name, parameter in self.model.named_parameters():
+            self._require_finite(f"model parameter {name}", parameter)
+
     @torch.no_grad()
     def act(
             self,
@@ -213,6 +295,15 @@ class Trainer:
             ppo_data:
                 tensors needed later for PPO storage.
         """
+        if deterministic and not self.inference_only:
+            raise ValueError("Use deterministic actions only in inference mode")
+
+        observation = np.asarray(observation, dtype=np.float32)
+        if observation.ndim != 1:
+            raise ValueError(f"Expected a 1-D observation, got shape {observation.shape}")
+        if not np.isfinite(observation).all():
+            raise ValueError("Observation contains NaN or infinite values")
+
         obs = self._to_obs_tensor(observation)
         continuous_dist, discrete_dist, value = self.model.distributions_and_value(obs)
 
@@ -224,18 +315,29 @@ class Trainer:
         discrete_action_int: Optional[int] = None
 
         if continuous_dist is not None:
-            raw_continuous = continuous_dist.mean if deterministic else continuous_dist.sample()
-            continuous_log_prob = continuous_dist.log_prob(raw_continuous).sum(dim=-1)
-            continuous_entropy = continuous_dist.entropy().sum(dim=-1)
+            if deterministic:
+                # TransformedDistribution.mean is not generally defined.
+                # Transform the Normal mean explicitly for evaluation.
+                base_mean = continuous_dist.base_dist.loc
+                midpoint = (self.config.continuous_action_high + self.config.continuous_action_low) / 2.0
+                half_range = (self.config.continuous_action_high - self.config.continuous_action_low) / 2.0
+                continuous_action = torch.tanh(base_mean) * half_range + midpoint
+            else:
+                continuous_action = continuous_dist.sample()
 
-            clipped_continuous = torch.clamp(
-                raw_continuous,
-                self.config.continuous_action_low,
-                self.config.continuous_action_high,
-            )
-            continuous_action_np = clipped_continuous.squeeze(0).cpu().numpy()
+            continuous_action = self._clamp_continuous_action(continuous_action)
+            self._require_finite("sampled continuous action", continuous_action)
+            continuous_log_prob = continuous_dist.log_prob(continuous_action).sum(dim=-1)
+            # TransformedDistribution does not provide a closed-form entropy.
+            # The base Normal entropy is a stable, common approximation for the
+            # exploration bonus.
+            continuous_entropy = continuous_dist.base_dist.entropy().sum(dim=-1)
+            self._require_finite("continuous log probability", continuous_log_prob)
 
-            ppo_data["continuous_action"] = raw_continuous.squeeze(0)
+            continuous_action_np = continuous_action.squeeze(0).cpu().numpy()
+
+            # Store the bounded action that the environment actually used.
+            ppo_data["continuous_action"] = continuous_action.squeeze(0)
             log_prob_parts.append(continuous_log_prob)
             entropy_parts.append(continuous_entropy)
 
@@ -265,23 +367,36 @@ class Trainer:
             next_observation: Optional[np.ndarray],
     ) -> None:
         obs_tensor = self._to_obs_tensor(observation).squeeze(0).detach().cpu()
+        self._require_finite("transition observation", obs_tensor)
+
+        reward_value = float(reward)
+        if not np.isfinite(reward_value):
+            raise ValueError(f"Reward must be finite, got {reward_value}")
 
         # If there is no final observation, PPO treats terminal next value as 0.
         next_obs_tensor = None
         if next_observation is not None:
             next_obs_tensor = self._to_obs_tensor(next_observation).squeeze(0).detach().cpu()
+            self._require_finite("next observation", next_obs_tensor)
+
+        value_tensor = ppo_data["value"].detach().cpu()
+        log_prob_tensor = ppo_data["log_prob"].detach().cpu()
+        self._require_finite("stored value estimate", value_tensor)
+        self._require_finite("stored log probability", log_prob_tensor)
 
         transition: Dict[str, object] = {
             "observation": obs_tensor,
-            "reward": float(reward),
+            "reward": reward_value,
             "done": bool(done),
             "next_observation": next_obs_tensor,
-            "value": ppo_data["value"].detach().cpu(),
-            "log_prob": ppo_data["log_prob"].detach().cpu(),
+            "value": value_tensor,
+            "log_prob": log_prob_tensor,
         }
 
         if self.config.action_dim_continuous > 0:
-            transition["continuous_action"] = ppo_data["continuous_action"].detach().cpu()
+            continuous_action = ppo_data["continuous_action"].detach().cpu()
+            self._require_finite("stored continuous action", continuous_action)
+            transition["continuous_action"] = self._clamp_continuous_action(continuous_action)
 
         if self.config.action_dim_discrete > 0:
             transition["discrete_action"] = ppo_data["discrete_action"].detach().cpu()
@@ -373,9 +488,9 @@ class Trainer:
         if len(self.buffer) == 0:
             return None
         stats = self.learn()
+        self.last_stats = stats
         print("PPO update:", stats)
         self.print_performance()
-        self.last_stats = stats
         return stats
 
     def record_episode_result(self, episode_reward: float, episode_length: int) -> None:
@@ -436,6 +551,7 @@ class Trainer:
 
     def learn(self) -> Dict[str, float]:
         cfg = self.config
+        self._require_finite_model()
         batch = self._flatten_with_gae()
 
         observations = batch["observations"]
@@ -443,7 +559,16 @@ class Trainer:
         advantages = batch["advantages"]
         returns = batch["returns"]
 
-        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+        for name, tensor in (
+                ("observations", observations),
+                ("old log probabilities", old_log_probs),
+                ("advantages", advantages),
+                ("returns", returns),
+        ):
+            self._require_finite(name, tensor)
+
+        advantage_std = advantages.std(unbiased=False).clamp_min(1e-8)
+        advantages = (advantages - advantages.mean()) / advantage_std
 
         batch_size = observations.shape[0]
         indices = np.arange(batch_size)
@@ -471,9 +596,11 @@ class Trainer:
                 entropy_parts: List[torch.Tensor] = []
 
                 if continuous_dist is not None:
-                    mb_continuous_actions = batch["continuous_actions"][mb_idx_t]
+                    mb_continuous_actions = self._clamp_continuous_action(
+                        batch["continuous_actions"][mb_idx_t]
+                    )
                     continuous_log_probs = continuous_dist.log_prob(mb_continuous_actions).sum(dim=-1)
-                    continuous_entropy = continuous_dist.entropy().sum(dim=-1)
+                    continuous_entropy = continuous_dist.base_dist.entropy().sum(dim=-1)
                     new_log_prob_parts.append(continuous_log_probs)
                     entropy_parts.append(continuous_entropy)
 
@@ -487,7 +614,9 @@ class Trainer:
                 new_log_probs = torch.stack(new_log_prob_parts, dim=0).sum(dim=0)
                 entropy = torch.stack(entropy_parts, dim=0).sum(dim=0).mean()
 
-                ratio = torch.exp(new_log_probs - mb_old_log_probs)
+                # Avoid exp overflow before PPO's ratio clipping is applied.
+                log_ratio = torch.clamp(new_log_probs - mb_old_log_probs, -20.0, 20.0)
+                ratio = torch.exp(log_ratio)
                 unclipped = ratio * mb_advantages
                 clipped = torch.clamp(ratio, 1.0 - cfg.clip_epsilon, 1.0 + cfg.clip_epsilon) * mb_advantages
                 policy_loss = -torch.min(unclipped, clipped).mean()
@@ -495,10 +624,19 @@ class Trainer:
                 value_loss = nn.functional.mse_loss(values, mb_returns)
                 loss = policy_loss + cfg.value_loss_coef * value_loss - cfg.entropy_coef * entropy
 
+                self._require_finite("new log probabilities", new_log_probs)
+                self._require_finite("PPO loss", loss)
+
                 self.optimizer.zero_grad(set_to_none=True)
                 loss.backward()
-                nn.utils.clip_grad_norm_(self.model.parameters(), cfg.max_grad_norm)
+                gradient_norm = nn.utils.clip_grad_norm_(
+                    self.model.parameters(),
+                    cfg.max_grad_norm,
+                    error_if_nonfinite=False,
+                )
+                self._require_finite("gradient norm", gradient_norm)
                 self.optimizer.step()
+                self._require_finite_model()
 
                 total_policy_loss += float(policy_loss.detach().cpu())
                 total_value_loss += float(value_loss.detach().cpu())
@@ -537,7 +675,7 @@ class Trainer:
             path,
         )
 
-    def load(self, path: str, load_optimizer: bool = True) -> None:
+    def load(self, path: str, load_optimizer: bool = True, load_stats: bool = True) -> None:
         """
         Load a saved model checkpoint.
 
@@ -549,11 +687,11 @@ class Trainer:
 
         if load_optimizer and "optimizer" in checkpoint:
             self.optimizer.load_state_dict(checkpoint["optimizer"])
-
-        self.training_updates = int(checkpoint.get("training_updates", self.training_updates))
-        self.total_environment_steps = int(checkpoint.get("total_environment_steps", self.total_environment_steps))
-        self.completed_episodes = int(checkpoint.get("completed_episodes", self.completed_episodes))
-        self.best_average_reward = float(checkpoint.get("best_average_reward", self.best_average_reward))
+        if load_stats:
+            self.training_updates = int(checkpoint.get("training_updates", self.training_updates))
+            self.total_environment_steps = int(checkpoint.get("total_environment_steps", self.total_environment_steps))
+            self.completed_episodes = int(checkpoint.get("completed_episodes", self.completed_episodes))
+            self.best_average_reward = float(checkpoint.get("best_average_reward", self.best_average_reward))
 
     def load_trained_model(self, path: Optional[str] = None, inference_only: bool = True) -> None:
         """
@@ -567,6 +705,8 @@ class Trainer:
         - learn_if_ready() does nothing
         """
         model_path = path if path is not None else self.config.best_model_path
+        if model_path is None:
+            raise ValueError("No model path was provided and best_model_path is not configured")
         self.load(model_path, load_optimizer=False)
         self.set_inference_mode(inference_only)
 
@@ -591,30 +731,48 @@ class Trainer:
 
         This is the simplest function for gameplay after training.
         """
-        continuous_action, discrete_action, _ = self.act(observation, deterministic=deterministic)
+        previous_inference_mode = self.inference_only
+        self.inference_only = True
+        self.model.eval()
+        try:
+            continuous_action, discrete_action, _ = self.act(observation, deterministic=deterministic)
+        finally:
+            self.inference_only = previous_inference_mode
+            self.model.eval() if previous_inference_mode else self.model.train()
         return {"continuous": continuous_action, "discrete": discrete_action}
 
 class Academy:
+    # Require explicit configuration. A silent default with obs_dim=1 and a
+    # one-class action space can make an incorrectly configured walker appear
+    # to train while it cannot produce meaningful actions.
     __ID = 0
-    __trainer = Trainer(Config(obs_dim=1, action_dim_discrete=1, rollout_steps=1024, device="cpu", best_model_path="model.pt", max_steps=1024))
-    __Agents = []
+    __trainer: Optional[Trainer] = None
+    __Agents: List["Agent"] = []
+
     def __init__(self, trainer):
         self.Agents = []
         self.trainer = trainer
+
     @staticmethod
-    def setup_trainer(config):
+    def setup_trainer(config: Config) -> None:
+        if Academy.__Agents:
+            raise RuntimeError("Call Academy.setup_trainer() before creating Agent instances")
         Academy.__trainer = Trainer(config)
 
     @staticmethod
-    def get_trainer():
+    def get_trainer() -> Trainer:
+        if Academy.__trainer is None:
+            raise RuntimeError("Call Academy.setup_trainer(config) before creating agents")
         return Academy.__trainer
 
     @staticmethod
-    def load_model(model):
-        Academy.__trainer.load(model)
+    def load_model(model, load_optimizer=True, load_stats=True):
+        Academy.get_trainer().load(model, load_optimizer, load_stats)
 
     @staticmethod
-    def AddAgent(agent):
+    def AddAgent(agent: "Agent") -> None:
+        if Academy.__trainer is None:
+            raise RuntimeError("Call Academy.setup_trainer(config) before creating agents")
         agent.agent_id = Academy.__ID
         Academy.__ID += 1
         agent.trainer = Academy.__trainer
@@ -644,31 +802,41 @@ class Agent(Component):
         self.collected_observations = 0
 
     def Start(self):
+        self.begin_episode()
+
+    def begin_episode(self) -> None:
+        """Reset this agent and then invoke the user episode-start hook."""
         self.__OnEpisodeBegin()
 
     def get_collected_observations_length(self):
         return self.collected_observations
 
+    def _append_observation_values(self, values) -> None:
+        values = np.asarray(values, dtype=np.float32).reshape(-1)
+        end = self.collected_observations + values.size
+        if end > self.trainer.config.obs_dim:
+            raise ValueError(
+                f"Observation buffer overflow: adding {values.size} values would "
+                f"exceed obs_dim={self.trainer.config.obs_dim}"
+            )
+        if not np.isfinite(values).all():
+            raise ValueError("Observation contains NaN or infinite values")
+        self.observations[self.collected_observations:end] = values
+        self.collected_observations = end
+
     def add_observation(self, observation):
-        if type(observation) == Vector3:
-            self.observations[self.collected_observations] = observation.x
-            self.observations[self.collected_observations+1] = observation.y
-            self.observations[self.collected_observations+2] = observation.z
-            self.collected_observations += 3
-        elif type(observation) == Quaternion:
-            self.observations[self.collected_observations] = observation.x
-            self.observations[self.collected_observations + 1] = observation.y
-            self.observations[self.collected_observations + 2] = observation.z
-            self.observations[self.collected_observations + 3] = observation.w
-            self.collected_observations += 4
-        elif isinstance(observation, (int, float, bool, str, bytes, complex, np.generic)):
-            self.observations[self.collected_observations] = observation
-            self.collected_observations += 1
+        if isinstance(observation, Vector3):
+            self._append_observation_values((observation.x, observation.y, observation.z))
+        elif isinstance(observation, Quaternion):
+            self._append_observation_values((observation.x, observation.y, observation.z, observation.w))
+        elif isinstance(observation, Real):
+            self._append_observation_values((observation,))
         else:
-            raise Exception(f"observation type: {type(observation)} is not acceptable")
+            raise TypeError(f"observation type: {type(observation)} is not acceptable")
 
     def OnEpisodeBegin(self):
         pass
+
     def __OnEpisodeBegin(self) -> None:
         """
         Call this from the engine when this agent/game object starts or resets an episode.
@@ -735,15 +903,30 @@ class Agent(Component):
 
         Important independent-agent pattern:
         - If this agent already had a previous action, this call stores that previous
-          transition using the current observation as next_observation.
+          transition using the current observation as next_observation, unless the
+          previous action reached max_steps and is closed as a truncation below.
         - Because this is per-agent state, agents can request actions independently.
-        - If config.max_steps is set, the agent automatically ends the episode when
-          episode_step reaches max_steps.
+        - Real terminal events are handled by the engine after the reward for the
+          last action has been added.
+        - A max_steps time-limit episode is ended automatically here, when the
+          post-action observation arrives. This preserves the final reward and
+          supplies the observation needed for value bootstrapping.
         """
-        if self.should_end_by_max_steps():
-            self.end_episode()
-
         observations = np.asarray(observations, dtype=np.float32)
+        if observations.ndim != 1 or observations.shape[0] != self.trainer.config.obs_dim:
+            raise ValueError(
+                f"Expected observation shape ({self.trainer.config.obs_dim},), got {observations.shape}"
+            )
+        if not np.isfinite(observations).all():
+            raise ValueError("Observation contains NaN or infinite values")
+
+        # The previous action is complete now: its reward was added by the
+        # engine and `observations` is the state after that action. If the
+        # previous action reached max_steps, close the episode before asking
+        # the policy for another action. This is automatic, but deliberately
+        # happens one observation later so the final transition is not lost.
+        if self.has_active_action and self.should_end_by_max_steps():
+            self.end_episode(terminated=False, final_observation=observations)
 
         if (
             not self.trainer.inference_only
@@ -768,44 +951,69 @@ class Agent(Component):
         self.has_active_action = True
         self.episode_step += 1
 
-        if self.should_end_by_max_steps():
-            self.end_episode()
-
         return continuous_action, discrete_action
 
     def should_end_by_max_steps(self) -> bool:
-        """Return True when this episode reached config.max_steps."""
+        """Return True when this episode reached config.max_steps.
+
+        This is exposed for diagnostics; get_mixed_actions() performs the
+        automatic episode ending.
+        """
         max_steps = self.trainer.config.max_steps
         return max_steps is not None and self.episode_step >= max_steps
 
     def add_reward(self, reward: float) -> None:
-        """Add reward to this agent's current step and episode total."""
+        """Add reward to the current action, optionally clipping the episode total."""
         r = float(reward)
-        if self.trainer.config.max_episode_reward:
-            if abs(self.episode_reward) + abs(r) < self.trainer.config.max_episode_reward:
-                self.pending_reward += r
-                self.episode_reward += r
-        else:
-            self.pending_reward += r
-            self.episode_reward += r
+        limit = self.trainer.config.max_episode_reward
+        if limit is not None:
+            new_total = float(np.clip(self.episode_reward + r, -limit, limit))
+            r = new_total - self.episode_reward
+        self.pending_reward += r
+        self.episode_reward += r
 
     def set_reward(self, reward: float) -> None:
         """Set this step's reward value, replacing any pending reward for the current step."""
         old_pending = self.pending_reward
-        self.pending_reward = float(reward)
-        self.episode_reward += self.pending_reward - old_pending
+        base_total = self.episode_reward - old_pending
+        new_pending = float(reward)
+        limit = self.trainer.config.max_episode_reward
+        if limit is not None:
+            new_total = float(np.clip(base_total + new_pending, -limit, limit))
+            new_pending = new_total - base_total
+        self.pending_reward = new_pending
+        self.episode_reward = base_total + new_pending
 
-    def end_episode(self) -> None:
-        self.trainer.learn_if_ready()
+    def end_episode(
+            self,
+            terminated: bool = True,
+            final_observation: Optional[np.ndarray] = None,
+    ) -> None:
         """
-        Call when this agent's episode ends.
+        End the current episode after its final reward has been added.
 
-        You said the engine will not provide a final observation. That is supported:
-        the final transition is stored with next_observation=None and done=True,
-        so the bootstrap value is treated as 0.
+        terminated=True is a real terminal state and does not bootstrap.
+        terminated=False represents a time-limit truncation and requires the
+        observation after the final action so GAE can bootstrap correctly.
         """
+        if not self.has_active_action:
+            return
+        if not terminated and final_observation is None:
+            raise ValueError("A truncated episode requires final_observation")
+
         final_episode_reward = self.episode_reward
         final_episode_length = self.episode_step
+
+        next_observation = None
+        if final_observation is not None:
+            next_observation = np.asarray(final_observation, dtype=np.float32)
+            if next_observation.ndim != 1 or next_observation.shape[0] != self.trainer.config.obs_dim:
+                raise ValueError(
+                    f"Expected final observation shape ({self.trainer.config.obs_dim},), "
+                    f"got {next_observation.shape}"
+                )
+            if not np.isfinite(next_observation).all():
+                raise ValueError("Final observation contains NaN or infinite values")
 
         if (
             not self.trainer.inference_only
@@ -818,12 +1026,14 @@ class Agent(Component):
                 observation=self.last_observation,
                 ppo_data=self.last_ppo_data,
                 reward=self.pending_reward,
-                done=True,
-                next_observation=None,
+                done=terminated,
+                next_observation=next_observation,
             )
 
         if not self.trainer.inference_only:
             self.trainer.record_episode_result(final_episode_reward, final_episode_length)
+        # Store the terminal transition before allowing a rollout update.
+        self.trainer.learn_if_ready()
         self.__OnEpisodeBegin()
 
 
@@ -831,18 +1041,19 @@ class Agent(Component):
 if __name__ == "__main__":
     config = Config(
         obs_dim=12,
-        action_dim_continuous=3,
-        action_dim_discrete=5,
+        action_dim_continuous=10,
+        action_dim_discrete=0,
         rollout_steps=1024,
         max_steps=250,
         device="cpu",
     )
-    trainer = Trainer(config)
+    Academy.setup_trainer(config)
+    trainer = Academy.get_trainer()
 
-    agents = [Agent(trainer, agent_id=i) for i in range(4)]
+    agents = [Agent() for _ in range(4)]
 
     for agent in agents:
-        agent.OnEpisodeBegin()
+        agent.begin_episode()
 
     for frame in range(5000):
         # Independent stepping example: not every agent needs to act every frame.
@@ -862,6 +1073,10 @@ if __name__ == "__main__":
                 reward = np.random.randn() * 0.01
                 agent.add_reward(reward)
 
+                # A max_steps time-limit episode ends automatically on this
+                # agent's next get_actions(obs) call, using that obs as the
+                # post-action final observation.
+
             if np.random.random() < 0.005:
                 agent.end_episode()
 
@@ -869,3 +1084,4 @@ if __name__ == "__main__":
         if stats is not None:
             print("PPO update:", stats)
             trainer.print_performance()
+
