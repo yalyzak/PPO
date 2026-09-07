@@ -36,12 +36,11 @@ config = Config(
         rollout_steps = 10000,
         device="cpu",
         max_steps=400,
-        best_model_path="model5.pt",
+        best_model_path="model.pt",
         entropy_coef=0.0001,
 )
 
 Academy.setup_trainer(config)
-# Academy.load_model("model4.pt",True, False)
 
 warm = GameObject(size=Vector3(), children=[spine1, spine2, spine3, spine4, head]).add_component(MoveToGoal(goal))
 

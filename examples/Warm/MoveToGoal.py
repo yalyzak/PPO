@@ -33,16 +33,15 @@ class MoveToGoal(Agent):
     def OnEpisodeBegin(self):
         self.parent.reset_to_default()
         self.goal.reset_to_default()
-        self.parent.transform.local_position += Vector3(random.uniform(-10, 10), 0, random.uniform(0, 10))
-        self.parent.transform.local_position = Vector3(5, 0, random.uniform(0, 10))
-        self.goal.transform.local_position += Vector3(random.uniform(-10, 10), 0, random.uniform(-10, -5))
+        self.parent.transform.local_position += Vector3(random.uniform(-10, 10), 0, random.uniform(-10, 10))
+        self.goal.transform.local_position += Vector3(random.uniform(-10, 10), 0, random.uniform(-10, 10))
         self.start_dis = self.get_distance()
         self.min_distance = self.start_dis
         self.episodes += 1
 
     def add_observations(self):
         for body_part in self.bodyParts:
-            self.add_observation(body_part.transform.local_position)
+            self.add_observation(body_part.transform.position)
             self.add_observation(body_part.Rigidbody.velocity)
             self.add_observation(body_part.Rigidbody.angular_velocity)
             self.add_observation(body_part.transform.quaternion)
@@ -50,10 +49,10 @@ class MoveToGoal(Agent):
             if body_part in self.servos:
                 self.add_observation(body_part.ServoController.get_target_angle())
 
-        self.add_observation(self.goal.transform.local_position)
+        self.add_observation(self.goal.transform.position)
         direction = (
-                self.goal.transform.local_position
-                - self.head.transform.local_position
+                self.goal.transform.position
+                - self.head.transform.position
         )
 
         self.add_observation(direction.normalized())
@@ -96,12 +95,13 @@ class MoveToGoal(Agent):
         if keyboard.is_pressed("g"):
             return [-1,-1,-1]
         return [0,0,0]
+
     def Update(self, dt):
         self.add_observations()
         actions = self.get_continuous_actions()
         # actions = self.get_Actions()
         self.move(actions, dt)
-        # self.addRewardByDistance()
+        self.addRewardByDistance()
         # self.add_reward(-0.0001)
         if self.trainer.learn_if_ready():
             if self.episodes != 0:
