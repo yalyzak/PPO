@@ -112,8 +112,6 @@ def creat_robot(pos=Vector3(), use_PPO=True, model=None, save=True, load_optimiz
         entropy_coef = 0.001,
         max_episode_reward = 30,
         # learning_rate = 5e-5,
-
-
     )
 
     Academy.setup_trainer(config)

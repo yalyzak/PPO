@@ -5,7 +5,7 @@ class ServoMovment(Component):
     def __init__(self, servo):
         super(ServoMovment, self).__init__()
         self.servo = servo
-        self.speed = 1
+        self.speed = 120
 
     def Update(self, dt):
         if keyboard.is_pressed("q"):

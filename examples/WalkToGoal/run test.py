@@ -4,10 +4,11 @@ from bereshit.addons.essentials import FPS_cam, CamController, Servo
 from bereshit.addons.PPO.essentials import Goal, Wall
 from MoveToGoal import MoveToGoal
 from bereshit.addons.PPO.essentials.ServoMovment import ServoMovment
+from Test import BendDown
 
 cam = GameObject(position=Vector3(5, 13, -5), rotation=Vector3(45,-30,0)).add_component(Camera(shading="material preview"), CamController(), FPS_cam())
 
-floor = GameObject(position=Vector3(0,-1,0), size=Vector3(150,1,150)).add_component(BoxCollider(), Rigidbody(isKinematic=True), Wall())
+floor = GameObject(position=Vector3(0,-1,0), size=Vector3(150,1,150)).add_component(BoxCollider(), Rigidbody(isKinematic=True, friction_coefficient=1), Wall())
 
 wall1 = GameObject(position=Vector3(-75.5,0,0), size=Vector3(1,1,150)).add_component(BoxCollider(), Rigidbody(isKinematic=True), Wall())
 wall2 = GameObject(position=Vector3(75.5,0,0), size=Vector3(1,1,150)).add_component(BoxCollider(), Rigidbody(isKinematic=True), Wall())
@@ -25,7 +26,8 @@ min = -45
 speed = 1
 torque = 3
 
-feet = GameObject(size=Vector3(2.6, 0.5, 1.2), position=Vector3(-.5, 0, -0.3), name="feet").add_component(BoxCollider(), Rigidbody(mass=0.01, friction_coefficient=1))
+feet = GameObject(size=Vector3(2.6, 0.5, 1.2), position=Vector3(-.5, 0, -0.3), name="feet").add_component(
+        BoxCollider(), Rigidbody(mass=0.01))
 
 mount = GameObject(position=Vector3(0, 1, 0), size=Vector3(.5, .5, .5), name="mount").add_component(BoxCollider(), Rigidbody(mass=0.01), FixedJoint(feet))
 
@@ -48,7 +50,8 @@ hip2 = GameObject(position=Vector3(0, 13, 0), size=Vector3(.5, .5, .5), name="hi
 leg1 = GameObject(size=Vector3(), children=[feet, mount, servo1, servo2, calf, mount2, knee, thigh, hip1, hip2])
 
 
-feet2 = GameObject(size=Vector3(2.6, 0.5, 1.2), position=Vector3(-.5, 0, -0.3), name="feet").add_component(BoxCollider(), Rigidbody(mass=0.01, friction_coefficient=1))
+feet2 = GameObject(size=Vector3(2.6, 0.5, 1.2), position=Vector3(-.5, 0, -0.3), name="feet").add_component(
+        BoxCollider(), Rigidbody(mass=0.01))
 
 mount_2 = GameObject(position=Vector3(0, 1, 0), size=Vector3(.5, .5, .5), name="mount").add_component(BoxCollider(), Rigidbody(mass=0.01), FixedJoint(feet2))
 
@@ -83,25 +86,14 @@ leg2.set_default()
 
 hip_l = leg2.search_by_name("hip2")[0]
 
-hip_bone = GameObject(position=Vector3(0, 14, 1), size=Vector3(.5, .5, 2), name="hip_bone").add_component(BoxCollider(), Rigidbody(mass=0.02), FixedJoint(hip_l), FixedJoint(hip2))
+hip_bone = GameObject(position=Vector3(0, 14, 1), size=Vector3(.5, .5, 2), name="hip_bone").add_component(BoxCollider(), Rigidbody(mass=0.05), FixedJoint(hip_l), FixedJoint(hip2))
 
-config = Config(
-        obs_dim=286,
-        action_dim_continuous=10,
-        rollout_steps = 10000,
-        device="cpu",
-        max_steps=400,
-        best_model_path="model.pt",
-)
 
-Academy.setup_trainer(config)
-
-scene = [floor, wall1, wall2, wall3, wall4, goal]
+scene = [floor, wall1, wall2, wall3, wall4, goal, cam]
 
 legs = GameObject(size=Vector3(), children=[leg1, leg2, hip_bone])
 
-legs.add_component(MoveToGoal(goal))
-# legs.add_component(ServoMovment(servo1))
+legs.add_component(BendDown(servo1, knee, hip1, servo12, knee2, hip12))
 
 
-Core.run_max_speed(scene + [legs], tick=1/240, Render=False, scriptRefreshRate=1/20)
+Core.run(scene + [legs], tick=1/240, Render=True, scriptRefreshRate=1/20)
