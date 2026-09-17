@@ -96,7 +96,7 @@ config = Config(
 
 Academy.setup_trainer(config)
 
-scene = [floor, wall1, wall2, wall3, wall4, goal]
+scene = [floor, wall1, wall2, wall3, wall4, goal, cam]
 
 legs = GameObject(size=Vector3(), children=[leg1, leg2, hip_bone])
 
@@ -104,4 +104,4 @@ legs.add_component(MoveToGoal(goal))
 # legs.add_component(ServoMovment(servo1))
 
 
-Core.run_max_speed(scene + [legs], tick=1/240, Render=False, scriptRefreshRate=1/20)
+Core.run_max_speed(scene + [legs], tick=1/240, Render=True, scriptRefreshRate=1/20, physics_epochs=200)

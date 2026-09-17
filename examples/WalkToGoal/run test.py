@@ -8,7 +8,7 @@ from Test import BendDown
 
 cam = GameObject(position=Vector3(5, 13, -5), rotation=Vector3(45,-30,0)).add_component(Camera(shading="material preview"), CamController(), FPS_cam())
 
-floor = GameObject(position=Vector3(0,-1,0), size=Vector3(150,1,150)).add_component(BoxCollider(), Rigidbody(isKinematic=True, friction_coefficient=1), Wall())
+floor = GameObject(position=Vector3(0,-1,0), size=Vector3(150,1,150)).add_component(BoxCollider(), Rigidbody(isKinematic=True, friction_coefficient=5), Wall())
 
 wall1 = GameObject(position=Vector3(-75.5,0,0), size=Vector3(1,1,150)).add_component(BoxCollider(), Rigidbody(isKinematic=True), Wall())
 wall2 = GameObject(position=Vector3(75.5,0,0), size=Vector3(1,1,150)).add_component(BoxCollider(), Rigidbody(isKinematic=True), Wall())
@@ -27,7 +27,7 @@ speed = 1
 torque = 3
 
 feet = GameObject(size=Vector3(2.6, 0.5, 1.2), position=Vector3(-.5, 0, -0.3), name="feet").add_component(
-        BoxCollider(), Rigidbody(mass=0.01))
+        BoxCollider(), Rigidbody(mass=0.01, friction_coefficient=5))
 
 mount = GameObject(position=Vector3(0, 1, 0), size=Vector3(.5, .5, .5), name="mount").add_component(BoxCollider(), Rigidbody(mass=0.01), FixedJoint(feet))
 
@@ -51,7 +51,7 @@ leg1 = GameObject(size=Vector3(), children=[feet, mount, servo1, servo2, calf, m
 
 
 feet2 = GameObject(size=Vector3(2.6, 0.5, 1.2), position=Vector3(-.5, 0, -0.3), name="feet").add_component(
-        BoxCollider(), Rigidbody(mass=0.01))
+        BoxCollider(), Rigidbody(mass=0.01, friction_coefficient=5))
 
 mount_2 = GameObject(position=Vector3(0, 1, 0), size=Vector3(.5, .5, .5), name="mount").add_component(BoxCollider(), Rigidbody(mass=0.01), FixedJoint(feet2))
 
@@ -96,4 +96,4 @@ legs = GameObject(size=Vector3(), children=[leg1, leg2, hip_bone])
 legs.add_component(BendDown(servo1, knee, hip1, servo12, knee2, hip12))
 
 
-Core.run(scene + [legs], tick=1/240, Render=True, scriptRefreshRate=1/20)
+Core.run(scene + [legs], tick=1/240, Render=True, scriptRefreshRate=1/20, physics_epochs=200)
