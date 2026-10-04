@@ -13,3 +13,4 @@ class GoalReach(Component):
             self.agent.add_reward(1)
             self.agent.success += 1
             self.agent.end_episode()
+

@@ -17,12 +17,12 @@ wall4 = GameObject(position=Vector3(0,0,75.5), size=Vector3(150,1,1)).add_compon
 feet = GameObject(size=Vector3(2.6, 0.5, 1.2), position=Vector3(-.5, 0, -0.3), name="feet").add_component(
         BoxCollider(), Rigidbody(mass=0.01))
 
-goal = GameObject(position=Vector3(5,13,5), size=Vector3(1, 1, 1)).add_component(BoxCollider(), Rigidbody(isKinematic=True), Goal())
+goal = GameObject(position=Vector3(5,0,5), size=Vector3(1, 1, 1)).add_component(BoxCollider(), Rigidbody(isKinematic=True), Goal())
 
 
 max = 45
 min = -45
-speed = 1
+speed = 5
 torque = 3
 
 mount = GameObject(position=Vector3(0, 1, 0), size=Vector3(.5, .5, .5), name="mount").add_component(BoxCollider(), Rigidbody(mass=0.01), FixedJoint(feet))
@@ -48,7 +48,7 @@ config = Config(
         action_dim_continuous=5,
         rollout_steps = 10000,
         device="cpu",
-        max_steps=400,
+        max_steps=40000,
         best_model_path="model.pt",
 )
 
@@ -59,4 +59,4 @@ leg = GameObject(size=Vector3(), children=[feet, mount, servo1, servo2, calf, mo
 
 scene = [floor, wall1, wall2, wall3, wall4, leg, goal, cam]
 
-Core.run(scene, tick=1/120)
+Core.run(scene, tick=1/300, scriptRefreshRate=1/30)

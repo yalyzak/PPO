@@ -2,7 +2,7 @@ import random
 
 from bereshit import Vector3
 from bereshit.addons.PPO import Agent
-from bereshit.addons.PPO.essentials import GoalReach
+from bereshit.addons.PPO.essentials import GoalTriggered, WallTriggered
 
 
 class MoveToGoal(Agent):
@@ -17,13 +17,16 @@ class MoveToGoal(Agent):
         self.bodyParts = parent.get_all_children_physics()
         for bodypart in self.bodyParts:
             if bodypart.name != "feet":
-                bodypart.add_component(GoalReach(self))
+                bodypart.add_component(WallTriggered(self))
+            else:
+                bodypart.add_component(GoalTriggered(self))
 
         self.servos = parent.search_by_component("Servo")
         self.head = parent.search_by_name("hip2")[0]
+        self.feet = parent.search_by_name("feet")[0]
 
     def get_distance(self):
-        return (self.head.transform.local_position - self.goal.transform.local_position).magnitude()
+        return (self.feet.transform.local_position - self.goal.transform.local_position).magnitude()
 
     def OnEpisodeBegin(self):
         self.parent.reset_to_default()
@@ -31,7 +34,7 @@ class MoveToGoal(Agent):
         self.parent.transform.local_position += Vector3(random.uniform(-10, 10), 0, random.uniform(-10, 10))
         self.goal.transform.local_position += Vector3(random.uniform(-10, 10), 0, random.uniform(-10, 10))
         self.start_dis = self.get_distance()
-        self.min_distance = self.start_dis
+        self.last_distance = self.start_dis
         self.episodes += 1
 
     def add_observations(self):
@@ -59,15 +62,14 @@ class MoveToGoal(Agent):
 
     def addRewardByDistance(self):
         distance = self.get_distance()
-
-        if distance < self.min_distance:
-            reward = (self.min_distance - distance) / self.start_dis
-            self.add_reward(reward)
-            self.min_distance = distance
+        reward = (self.last_distance - distance) / self.start_dis
+        self.add_reward(reward)
+        self.last_distance = distance
 
     def Update(self, dt):
         self.add_observations()
         actions = self.get_continuous_actions()
+        self.endEarly()
         self.move(actions, dt)
         self.addRewardByDistance()
         if self.trainer.learn_if_ready():
@@ -75,3 +77,8 @@ class MoveToGoal(Agent):
                 print(self.success/self.episodes)
             self.episodes = 0
             self.success = 0
+
+    def endEarly(self):
+        if self.feet.transform.position.y > 5 or self.feet.transform.position.y < -5:
+            self.add_reward(-1)
+            self.end_episode()

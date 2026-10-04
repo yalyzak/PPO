@@ -33,7 +33,7 @@ wall4 = GameObject(position=Vector3(0,0,15.5), size=Vector3(30,1,1)).add_compone
 max = 45
 min = -45
 speed = 10
-torque = 5
+torque = 2
 
 goal = GameObject(position=Vector3(2,-0.4,2), size=Vector3(0.3, 0.3, 0.3)).add_component(BoxCollider(), Rigidbody(isKinematic=True), Goal())
 
@@ -43,7 +43,7 @@ spine2 = GameObject(position=Vector3(1,0,0), size=Vector3(0.5,0.5,0.5), name="sp
 
 spine3 = GameObject(position=Vector3(2,0,0), size=Vector3(0.5,0.5,0.5), name="spine3").add_component(BoxCollider(), Rigidbody(mass=0.05), Servo(spine2, Vector3(0,1,0), max, min, speed, torque))
 
-spine4 = GameObject(position=Vector3(3,0,0), size=Vector3(0.5,0.5,0.5), name="spine3").add_component(BoxCollider(), Rigidbody(mass=0.05), Servo(spine3, Vector3(0,0,1), max, min, speed, torque))
+spine4 = GameObject(position=Vector3(3,0,0), size=Vector3(0.5,0.5,0.5), name="spine3").add_component(BoxCollider(), Rigidbody(mass=0.05), Servo(spine3, Vector3(0,1,0), max, min, speed, torque))
 
 head = GameObject(position=Vector3(4,0,0), size=Vector3(0.5,0.5,0.5), name="head").add_component(BoxCollider(), Rigidbody(mass=0.05), FixedJoint(spine4))
 
