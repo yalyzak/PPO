@@ -1,3 +1,4 @@
+import math
 import random
 
 from bereshit import Vector3
@@ -23,10 +24,11 @@ class MoveToGoal(Agent):
         self.hip1 = parent.search_by_name("hip2")[0]
         self.hip2 = parent.search_by_name("hip2")[1]
         self.hip = parent.search_by_name("hip_bone")[0]
+        self.feets = parent.search_by_name("feet")
 
     def get_distance(self):
-        dis1 = (self.hip1.transform.local_position - self.goal.transform.local_position).magnitude()
-        dis2 = (self.hip2.transform.local_position - self.goal.transform.local_position).magnitude()
+        dis1 = (self.feets[0].transform.local_position - self.goal.transform.local_position).magnitude()
+        dis2 = (self.feets[1].transform.local_position - self.goal.transform.local_position).magnitude()
         dis3 = (self.hip.transform.local_position - self.goal.transform.local_position).magnitude()
         dis = max(dis1,max(dis2, dis3))
 
@@ -40,7 +42,7 @@ class MoveToGoal(Agent):
         self.goal.transform.local_position += Vector3(random.uniform(-10, 10), 0, random.uniform(-10, 10))
         self.goal.transform.local_position = Vector3(-10,14,0)
         self.start_dis = self.get_distance()
-        self.min_distance = self.start_dis
+        self.last_distance = self.start_dis
         self.episodes += 1
 
     def add_observations(self):
@@ -61,11 +63,18 @@ class MoveToGoal(Agent):
 
     def addRewardByDistance(self):
         distance = self.get_distance()
+        reward = (self.last_distance - distance)
+        self.add_reward(reward)
+        self.last_distance = distance
 
-        if distance < self.min_distance:
-            reward = (self.min_distance - distance) / self.start_dis
-            self.add_reward(reward)
-            self.min_distance = distance
+    def addShapeReward(self):
+        for foot in self.feets:
+            if foot.BoxCollider.enter or foot.BoxCollider.stay:
+                velocity = foot.Rigidbody.velocity
+                sliding_speed = math.sqrt(
+                    velocity.x ** 2 + velocity.z ** 2
+                )
+                self.add_reward(-0.002 * sliding_speed)
 
     def check(self):
         if self.hip.transform.position.y >= 16:

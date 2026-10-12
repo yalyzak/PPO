@@ -1110,15 +1110,20 @@ class Agent(Component):
 
     def add_observation(self, observation):
         if isinstance(observation, Vector3):
-            self._append_observation_values((observation.x, observation.y, observation.z))
+            values = (observation.x, observation.y, observation.z)
         elif isinstance(observation, Quaternion):
-            self._append_observation_values((observation.x, observation.y, observation.z, observation.w))
+            values = (observation.x, observation.y, observation.z, observation.w)
         elif isinstance(observation, Real):
-            self._append_observation_values((observation,))
+            values = (observation,)
         elif isinstance(observation, (np.ndarray, list, tuple)):
-            self._append_observation_values(observation)
+            values = observation
         else:
             raise TypeError(f"observation type: {type(observation)} is not acceptable")
+
+        values = np.asarray(values, dtype=np.float32)
+        values = np.nan_to_num(values, nan=0.0, posinf=0.0, neginf=0.0)
+
+        self._append_observation_values(values)
 
     def OnEpisodeBegin(self):
         pass
