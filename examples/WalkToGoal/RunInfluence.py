@@ -5,9 +5,9 @@ from bereshit.addons.PPO.essentials import Goal, Wall
 from MoveToGoal import MoveToGoal
 from bereshit.addons.PPO.essentials.ServoMovment import ServoMovment
 
-cam = GameObject(position=Vector3(-5, 0, -5), rotation=Vector3(0,0,0)).add_component(Camera(shading="material preview"), CamController(), FPS_cam())
+cam = GameObject(position=Vector3(5, 13, -5), rotation=Vector3(45,-30,0)).add_component(Camera(shading="material preview"), CamController(), FPS_cam())
 
-floor = GameObject(position=Vector3(0,-1,0), size=Vector3(150,1,150)).add_component(BoxCollider(), Rigidbody(isKinematic=True, friction_coefficient=1), Wall())
+floor = GameObject(position=Vector3(0,-1,0), size=Vector3(150,1,150)).add_component(BoxCollider(), Rigidbody(isKinematic=True), Wall())
 
 wall1 = GameObject(position=Vector3(-75.5,0,0), size=Vector3(1,1,150)).add_component(BoxCollider(), Rigidbody(isKinematic=True), Wall())
 wall2 = GameObject(position=Vector3(75.5,0,0), size=Vector3(1,1,150)).add_component(BoxCollider(), Rigidbody(isKinematic=True), Wall())
@@ -26,7 +26,7 @@ speed = 1
 torque = 15
 
 feet = GameObject(size=Vector3(2.6, 0.5, 1.2), position=Vector3(-.5, 0, -0.3), name="feet").add_component(
-        BoxCollider(), Rigidbody(mass=0.01, friction_coefficient=5))
+        BoxCollider(), Rigidbody(mass=0.10))
 
 mount = GameObject(position=Vector3(0, 1, 0), size=Vector3(.5, .5, .5), name="mount").add_component(BoxCollider(), Rigidbody(mass=0.10), FixedJoint(feet))
 
@@ -50,7 +50,7 @@ leg1 = GameObject(size=Vector3(), children=[feet, mount, servo1, servo2, calf, m
 
 
 feet2 = GameObject(size=Vector3(2.6, 0.5, 1.2), position=Vector3(-.5, 0, -0.3), name="feet").add_component(
-        BoxCollider(), Rigidbody(mass=0.01, friction_coefficient=5))
+        BoxCollider(), Rigidbody(mass=0.10))
 
 mount_2 = GameObject(position=Vector3(0, 1, 0), size=Vector3(.5, .5, .5), name="mount").add_component(BoxCollider(), Rigidbody(mass=0.10), FixedJoint(feet2))
 
@@ -85,7 +85,7 @@ leg2.set_default()
 
 hip_l = leg2.search_by_name("hip2")[0]
 
-hip_bone = GameObject(position=Vector3(0, 14, 1), size=Vector3(.5, .5, 2), name="hip_bone").add_component(BoxCollider(), Rigidbody(mass=0.02), FixedJoint(hip_l), FixedJoint(hip2))
+hip_bone = GameObject(position=Vector3(0, 14, 1), size=Vector3(.5, .5, 2), name="hip_bone").add_component(BoxCollider(), Rigidbody(mass=0.10), FixedJoint(hip_l), FixedJoint(hip2))
 
 config = Config(
         obs_dim=286,
