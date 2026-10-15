@@ -90,6 +90,7 @@ hip_bone = GameObject(position=Vector3(0, 14, 1), size=Vector3(.5, .5, 2), name=
 config = Config(
         obs_dim=286,
         action_dim_continuous=10,
+
         rollout_steps = 10000,
         device="cpu",
         max_steps=1000,

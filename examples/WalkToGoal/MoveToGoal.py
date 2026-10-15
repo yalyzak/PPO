@@ -40,9 +40,11 @@ class MoveToGoal(Agent):
         self.parent.transform.local_position += Vector3(random.uniform(-10, 10), 0, random.uniform(-10, 10))
         self.parent.transform.local_position = Vector3(0, 0, 0)
         self.goal.transform.local_position += Vector3(random.uniform(-10, 10), 0, random.uniform(-10, 10))
-        self.goal.transform.local_position = Vector3(-10,14,0)
+        self.goal.transform.local_position = Vector3(-50,14,0)
         self.start_dis = self.get_distance()
         self.last_distance = self.start_dis
+        self.min_dis = self.start_dis
+        self.past_steps = 0
         self.episodes += 1
 
     def add_observations(self):
@@ -79,6 +81,15 @@ class MoveToGoal(Agent):
     def check(self):
         if self.hip.transform.position.y >= 16:
             self.add_reward(-3)
+            self.end_episode()
+
+        if self.last_distance < self.min_dis:
+            self.min_dis = self.last_distance
+            self.past_steps = 0
+        else:
+            self.past_steps += 1
+
+        if self.past_steps > 100:
             self.end_episode()
 
     def Update(self, dt):
